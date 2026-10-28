@@ -1,0 +1,527 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Crowd vs. the Fed</title>
+<meta name="description" content="Do Kalshi prediction markets forecast US CPI inflation better than the Cleveland Fed's nowcast? Calibration, head-to-head accuracy, lead-lag and a cost-aware backtest.">
+<style>
+:root {
+  color-scheme: light;
+  --page: #fcfcfb; --card: #ffffff; --border: #e6e4de; --grid: #ecebe7;
+  --ink: #0b0b0b; --ink2: #52514e; --muted: #75746f;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --ref: #9a9993;
+  --accent-soft: #e8f0fb;
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+    --page: #141413; --card: #1a1a19; --border: #2e2e2b; --grid: #2c2c2a;
+    --ink: #f0efec; --ink2: #c3c2b7; --muted: #9a9993;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --ref: #8a8983;
+    --accent-soft: #1c2a3d;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #141413; --card: #1a1a19; --border: #2e2e2b; --grid: #2c2c2a;
+  --ink: #f0efec; --ink2: #c3c2b7; --muted: #9a9993;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --ref: #8a8983;
+  --accent-soft: #1c2a3d;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--page); color: var(--ink2);
+  font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+.wrap { max-width: 1040px; margin: 0 auto; padding: 0 16px; }
+header.top { padding: 40px 0 8px; }
+.kicker { font-size: 13px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 0 0 6px; }
+h1 { color: var(--ink); font-size: clamp(30px, 5vw, 44px); line-height: 1.1; margin: 0 0 12px; letter-spacing: -.01em; }
+h2 { color: var(--ink); font-size: 24px; line-height: 1.25; margin: 0 0 8px; }
+h3 { color: var(--ink); font-size: 17px; margin: 20px 0 6px; }
+.dek { font-size: 18px; max-width: 760px; margin: 0; }
+.toolbar { display: flex; justify-content: flex-end; padding-top: 16px; }
+button.theme {
+  font: inherit; font-size: 13px; color: var(--ink2); background: var(--card);
+  border: 1px solid var(--border); border-radius: 999px; padding: 4px 12px; cursor: pointer;
+}
+nav.toc { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 14px; margin: 20px 0 8px; }
+nav.toc a { color: var(--s1); text-decoration: none; }
+nav.toc a:hover { text-decoration: underline; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin: 24px 0 8px; }
+.tile { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
+.tile .v { color: var(--ink); font-size: 32px; font-weight: 650; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.tile .l { font-size: 14px; margin-top: 6px; }
+.tile .s { font-size: 13px; color: var(--muted); margin-top: 6px; }
+section { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 24px; margin: 20px 0; }
+section p { max-width: 780px; }
+.lede { color: var(--ink); font-size: 17px; }
+.chart { width: 100%; height: 430px; }
+.chart.short { height: 380px; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin: 8px 0 4px; }
+select {
+  font: inherit; color: var(--ink); background: var(--page); border: 1px solid var(--border);
+  border-radius: 8px; padding: 6px 10px; max-width: 100%;
+}
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.seg button {
+  font: inherit; font-size: 14px; color: var(--ink2); background: var(--page); border: 0;
+  border-right: 1px solid var(--border); padding: 6px 12px; cursor: pointer; font-variant-numeric: tabular-nums;
+}
+.seg button:last-child { border-right: 0; }
+.seg button[aria-pressed="true"] { background: var(--accent-soft); color: var(--ink); font-weight: 600; }
+.note { font-size: 14px; color: var(--muted); }
+.callout { background: var(--accent-soft); border-radius: 10px; padding: 12px 14px; color: var(--ink); font-size: 15px; margin: 12px 0; }
+details { margin-top: 12px; }
+summary { cursor: pointer; color: var(--s1); font-size: 14px; }
+.tablewrap { overflow-x: auto; margin-top: 8px; }
+table { border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; min-width: 100%; }
+th, td { text-align: right; padding: 6px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+th:first-child, td:first-child { text-align: left; }
+th { color: var(--ink); font-weight: 600; }
+ul.tight { padding-left: 20px; margin: 6px 0; }
+ul.tight li { margin: 4px 0; }
+footer { padding: 16px 0 48px; font-size: 14px; color: var(--muted); }
+footer a, section a { color: var(--s1); }
+code { font-size: 13px; background: var(--page); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; }
+@media (max-width: 760px) {
+  .grid2 { grid-template-columns: 1fr; }
+  section { padding: 18px 14px; }
+  .chart { height: 360px; }
+  .tile .v { font-size: 28px; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="toolbar"><button class="theme" id="theme-btn" type="button" aria-label="Switch color theme">Theme: auto</button></div>
+  <header class="top">
+    <p class="kicker">Prediction markets · Inflation forecasting</p>
+    <h1>Crowd vs. the Fed</h1>
+    <p class="dek" id="dek"></p>
+  </header>
+  <div class="tiles" id="tiles"></div>
+  <nav class="toc" aria-label="Sections">
+    <a href="#headline">Head-to-head</a><a href="#explorer">Pick a release</a><a href="#calibration">Calibration</a>
+    <a href="#leadlag">Who moves first</a><a href="#backtest">Backtest</a><a href="#method">Method &amp; limitations</a>
+  </nav>
+
+  <section id="headline">
+    <h2>Who forecasts CPI better?</h2>
+    <p class="lede" id="headline-lede"></p>
+    <p id="headline-body"></p>
+    <div id="c-horizon" class="chart" role="img" aria-label="Mean Brier score by days before release for Kalshi, the Cleveland Fed nowcast, and their average"></div>
+    <p class="note">Lower is better. Error bars: 95% bootstrap intervals for each source's mean. The tests compare the two sources release-by-release, which is more precise than comparing these overlapping bars.</p>
+    <details><summary>Table: accuracy and tests by horizon</summary><div class="tablewrap" id="t-dm"></div></details>
+  </section>
+
+  <section id="explorer">
+    <h2>Pick a CPI release</h2>
+    <p>How the market's view and the Fed's nowcast evolved before one release, and how close each came to the printed number.</p>
+    <div class="controls">
+      <label for="rel-select" class="note">Release</label>
+      <select id="rel-select"></select>
+      <span class="note">Probabilities at</span>
+      <div class="seg" id="h-buttons" role="group" aria-label="Days before release"></div>
+    </div>
+    <div class="grid2">
+      <div id="c-path" class="chart short" role="img" aria-label="Daily path of Kalshi's implied CPI and the Fed nowcast before release"></div>
+      <div id="c-curve" class="chart short" role="img" aria-label="Probability CPI prints above each strike, Kalshi vs Fed, with the outcome"></div>
+    </div>
+    <p class="note" id="explorer-note"></p>
+  </section>
+
+  <section id="calibration">
+    <h2>Are Kalshi prices calibrated?</h2>
+    <p class="lede" id="cal-lede"></p>
+    <p id="cal-body"></p>
+    <div class="grid2">
+      <div id="c-reliability" class="chart short" role="img" aria-label="Reliability diagram: market price vs observed frequency"></div>
+      <div id="c-weighting" class="chart short" role="img" aria-label="Fitted probability weighting curve vs 45 degree line and Tversky-Kahneman 1992"></div>
+    </div>
+    <h3>Distortion by category and liquidity</h3>
+    <p id="cal-groups-text"></p>
+    <div id="c-groups" class="chart" role="img" aria-label="Fitted distortion parameter by category and liquidity tercile"></div>
+    <p class="note">Dashed line: γ = 1, no distortion. Dotted line: the Tversky–Kahneman (1992) laboratory value, 0.61.</p>
+    <details><summary>Table: calibration regression</summary><div class="tablewrap" id="t-cal"></div></details>
+  </section>
+
+  <section id="leadlag">
+    <h2>Who moves first?</h2>
+    <p class="lede" id="ll-lede"></p>
+    <p id="ll-body"></p>
+    <div id="c-ccf" class="chart short" role="img" aria-label="Cross-correlation of daily changes at lags from minus 3 to plus 3 days"></div>
+    <details><summary>Table: Granger-style regressions</summary><div class="tablewrap" id="t-ll"></div></details>
+  </section>
+
+  <section id="backtest">
+    <h2>Can you trade on the disagreement?</h2>
+    <p class="lede" id="bt-lede"></p>
+    <p id="bt-body"></p>
+    <div id="c-sweep" class="chart" role="img" aria-label="Net profit per contract versus signal threshold, training vs held-out test period"></div>
+    <details><summary>Table: where the edge goes (held-out test)</summary><div class="tablewrap" id="t-bt"></div></details>
+  </section>
+
+  <section id="method">
+    <h2>Method &amp; limitations</h2>
+    <h3>Data</h3>
+    <ul class="tight">
+      <li><b>Kalshi</b> public API: every settled monthly headline-CPI market (series <code>KXCPI</code>) with hourly bid/ask candles, plus a seeded random sample of the whole exchange for calibration.</li>
+      <li><b>Cleveland Fed</b> inflation nowcasting archive: the daily nowcast sequence for every month since 2013. No fallback model was needed.</li>
+      <li><b>ALFRED</b> (St. Louis Fed): first-release CPI, which is exactly what Kalshi settles on (seasonally adjusted CPI-U, one-month change, one decimal, revisions ignored). It matched Kalshi's settlement in every checkable release.</li>
+    </ul>
+    <h3>How the comparison works</h3>
+    <ul class="tight" id="method-list"></ul>
+    <h3>Limitations</h3>
+    <ul class="tight" id="limits-list"></ul>
+    <p class="note">Every methodological choice, with its reason, is logged in <code>DECISIONS.md</code> in the repository.</p>
+  </section>
+
+  <footer>
+    <p><b>Download the data behind each chart:</b>
+      <a href="data/headtohead_scores_per_release.csv">scores per release</a> ·
+      <a href="data/headtohead_diebold_mariano.csv">Diebold–Mariano tests</a> ·
+      <a href="data/headtohead_encompassing.csv">encompassing</a> ·
+      <a href="data/cpi_probability_paths.csv">probability paths</a> ·
+      <a href="data/cpi_daily_paths.csv">daily paths</a> ·
+      <a href="data/calibration_reliability.csv">reliability</a> ·
+      <a href="data/calibration_weighting_by_group.csv">weighting by group</a> ·
+      <a href="data/leadlag_cross_correlations.csv">cross-correlations</a> ·
+      <a href="data/backtest_threshold_sweep.csv">backtest sweep</a></p>
+    <p id="built"></p>
+  </footer>
+</div>
+
+<script src="assets/plotly.min.js"></script>
+<script id="payload" type="application/json">__DATA__</script>
+<script>
+"use strict";
+const D = JSON.parse(document.getElementById("payload").textContent);
+const H = D.headline, R = D.releases.list, C = D.calibration, L = D.leadlag, B = D.backtest;
+const byH = h => H.by_horizon.find(r => r.h === h);
+const dmRow = (h, a, b) => H.dm.find(r => r.horizon_days === h && r.a === a && r.b === b);
+const encRow = h => H.encompassing.find(r => String(r.horizon_days) === String(h));
+
+// ---------- formatting
+const f = (x, d = 2) => (x === null || x === undefined || Number.isNaN(x)) ? "–" : Number(x).toFixed(d);
+const sgn = (x, d = 1) => (x > 0 ? "+" : x < 0 ? "−" : "") + Math.abs(x).toFixed(d);
+const pfmt = p => p < 0.001 ? "p < 0.001" : `p = ${p < 0.01 ? p.toFixed(3) : p.toFixed(2)}`;
+const pct = x => `${Math.round(x * 100)}%`;
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const set = (id, html) => { document.getElementById(id).innerHTML = html; };
+
+// ---------- narrative (all numbers from the payload)
+function writeText() {
+  const n = D.meta.n_releases, h1 = byH(1), h30 = byH(30);
+  const gain1 = (h1.fed.mean - h1.kalshi.mean) / h1.fed.mean;
+  const dm1 = dmRow(1, "kalshi", "fed"), dm3 = dmRow(3, "kalshi", "fed"), dm30 = dmRow(30, "kalshi", "fed");
+  const pLog1 = H.dm_log.find(r => r.horizon_days === 1).p_value, pRps1 = H.dm_rps.find(r => r.horizon_days === 1).p_value;
+  const e1 = encRow(1), e30 = encRow(30);
+  const c30 = dmRow(30, "combo", "kalshi");
+  const tk = C.tk, testNet = B.test.find(r => r.cost_model === "bid/ask + fees");
+
+  set("dek", `Kalshi lets anyone bet on next month's inflation print. The Cleveland Fed publishes a daily model-based nowcast of the same number.
+    Across <b>${n} monthly CPI releases</b> (${D.meta.first} – ${D.meta.last}) I compare them like-for-like: same strikes, same moment, no hindsight.`);
+
+  set("tiles", [
+    { v: pct(gain1), l: "lower forecast error for Kalshi than the Fed nowcast, 1 day before release",
+      s: `Brier ${f(h1.kalshi.mean, 3)} vs ${f(h1.fed.mean, 3)} · borderline (${pfmt(dm1.p_value)}) · ${n} releases` },
+    { v: pfmt(e1.logit_fed_p).replace("p = ", ""), l: "p-value for the Fed adding information Kalshi lacks, 1 day out",
+      s: `Nothing extra near release. At 30 days it does (${pfmt(e30.logit_fed_p)}).` },
+    { v: `γ = ${f(tk.estimate)}`, l: "probability distortion in Kalshi prices (1 = none)",
+      s: `95% CI ${f(tk.ci_low)}–${f(tk.ci_high)} · lab experiments: 0.61` },
+    { v: `${sgn(testNet.mean_pnl_cents)}¢`, l: "held-out backtest profit per contract after spread and fees",
+      s: `95% CI ${sgn(testNet.ci_low_cents)}¢ to ${sgn(testNet.ci_high_cents)}¢ · not distinguishable from zero` },
+  ].map(t => `<div class="tile"><div class="v">${t.v}</div><div class="l">${t.l}</div><div class="s">${t.s}</div></div>`).join(""));
+
+  set("headline-lede", `In the final two weeks before a CPI release, Kalshi's prices were about ${pct(gain1)} more accurate than the
+    Fed nowcast. But with ${n} releases the evidence is borderline, not conclusive. A month out, the Fed is slightly ahead and averaging the two is best.`);
+  set("headline-body", `Each source gets one score per release (the mean Brier score over that release's strikes), so the 5–15 strikes of one
+    release are never counted as independent evidence. At 1 day, Kalshi wins ${pct(dm1.share_first_better)} of releases. The Diebold–Mariano test gives
+    ${pfmt(dm1.p_value)} for the Brier score (${pfmt(pRps1)} for RPS, ${pfmt(pLog1)} for log score), and ${pfmt(dm3.p_value)} at 3 days.
+    At 30 days the Fed is ahead (Brier ${f(h30.fed.mean, 3)} vs ${f(h30.kalshi.mean, 3)}; ${pfmt(dm30.p_value)}), and the 50/50 average beats Kalshi
+    (${pfmt(c30.p_value)}). An <b>encompassing regression</b> asks whether each source carries information the other lacks. Near release the Fed adds
+    nothing beyond Kalshi's price (${pfmt(e1.logit_fed_p)}). At 30 days both carry independent information (Fed ${pfmt(e30.logit_fed_p)}), which is why
+    the average wins there.`);
+
+  const rows = [1, 3, 7, 14, 30].map(h => {
+    const b = byH(h), d = dmRow(h, "kalshi", "fed"), e = encRow(h), s = H.sensitivity.find(r => r.horizon_days === h);
+    return `<tr><td>${h} day${h > 1 ? "s" : ""}</td><td>${b.n}</td><td>${f(b.kalshi.mean, 4)}</td><td>${f(b.fed.mean, 4)}</td><td>${f(b.combo.mean, 4)}</td>
+      <td>${f(d.mean_diff, 4)}</td><td>${f(d.dm_stat)}</td><td>${f(d.p_value, 3)}</td><td>${pct(d.share_first_better)}</td>
+      <td>${f(e.logit_fed_coef)} (${f(e.logit_fed_p, 3)})</td><td>${f(s.p_value, 3)}</td></tr>`;
+  }).join("");
+  set("t-dm", `<table><thead><tr><th>Before release</th><th>Releases</th><th>Kalshi</th><th>Fed</th><th>50/50</th><th>Kalshi − Fed</th>
+    <th>DM stat</th><th>DM p</th><th>Kalshi wins</th><th>Fed extra info: coef (p)</th><th>p, normal-error Fed</th></tr></thead><tbody>${rows}</tbody></table>`);
+
+  // calibration
+  const sc = C.scores, reg = C.regression.find(r => r.sample.startsWith("primary (")), het = C.heterogeneity;
+  const lo = C.reliability[0], hi = C.reliability[C.reliability.length - 1];
+  set("cal-lede", `Across the exchange, a Kalshi price of 30¢ means it happens about 30% of the time, with a small, statistically detectable
+    favorite-longshot bias: cheap contracts are slightly overpriced and near-certainties slightly underpriced.`);
+  set("cal-body", `Sample: ${sc.n_points.toLocaleString()} prices from ${sc.n_events.toLocaleString()} events (1, 7 and 30 days before close; empty or
+    wide-spread books dropped). Brier score ${f(sc.brier, 3)} (95% CI ${f(sc.brier_ci_low, 3)}–${f(sc.brier_ci_high, 3)}), ${pct(sc.brier_skill_vs_base_rate)} better
+    than always predicting the base rate. Contracts priced ≤5¢ averaged ${f(lo.mean_price * 100, 1)}¢ but happened ${f(lo.observed_freq * 100, 1)}% of the time.
+    Those priced ≥95¢ averaged ${f(hi.mean_price * 100, 1)}¢ and happened ${f(hi.observed_freq * 100, 1)}%. Calibration slope ${f(reg.slope)} (SE ${f(reg.slope_se)}; 1 = perfect).
+    Fitting the prospect-theory weighting functions gives Tversky–Kahneman γ = ${f(C.tk.estimate)} [${f(C.tk.ci_low)}, ${f(C.tk.ci_high)}] and Prelec
+    α = ${f(C.prelec.estimate)} [${f(C.prelec.ci_low)}, ${f(C.prelec.ci_high)}]. That's real distortion, but far milder than the classic laboratory values
+    (${C.literature.map(x => `${esc(x.source)}: ${f(x.value)}`).join("; ")}).`);
+  const liq = id => C.groups.find(g => g.kind === "liquidity tercile" && g.level === id);
+  set("cal-groups-text", `Distortion looks weaker in the most liquid markets (γ = ${f(liq("high").estimate)} vs ${f(liq("low").estimate)} in the least
+    liquid). The mispricing regression's price × volume interaction agrees (${f(C.liq_interaction.coef)}, ${pfmt(C.liq_interaction.p)}), but formal tests of
+    differences across groups are not significant (liquidity ${pfmt(het["liquidity tercile"].p_value)}, category ${pfmt(het.category.p_value)}). Wide intervals
+    mean thin categories.`);
+  set("t-cal", `<table><thead><tr><th>Sample</th><th>Prices</th><th>Events</th><th>Intercept</th><th>Slope</th><th>SE</th><th>z (slope = 1)</th><th>Joint p</th></tr></thead><tbody>
+    ${C.regression.map(r => `<tr><td>${esc(r.sample)}</td><td>${r.n}</td><td>${r.n_events}</td><td>${f(r.intercept, 3)}</td><td>${f(r.slope, 3)}</td>
+    <td>${f(r.slope_se, 3)}</td><td>${f(r.z_slope_eq_1)}</td><td>${f(r.joint_p, 3)}</td></tr>`).join("")}</tbody></table>`);
+
+  // lead-lag
+  const g0 = L.granger[0], lag1 = L.ccf.find(r => r.lag === 1), lag1x = L.ccf_no_release_days.find(r => r.lag === 1);
+  set("ll-lede", `Day to day, neither source reliably moves first. The market and the model mostly move independently.`);
+  set("ll-body", `Kalshi is sampled at 9:30 a.m. ET, before the Fed's ~10:00 a.m. update, so its daily change can only react to <i>yesterday's</i> nowcast.
+    Kalshi following the Fed's last change: coefficient ${f(g0["fed_to_kalshi_coef (dF_l1 in dK eq)"])} (${pfmt(g0.fed_to_kalshi_p)}). The Fed following
+    Kalshi's earlier move: ${f(g0["kalshi_to_fed_coef (dK_l1 in dF eq)"])} (${pfmt(g0.kalshi_to_fed_p)}). The nowcast is unchanged on
+    ${pct(L.desc.share_days_nowcast_unchanged)} of days. The small correlation one day after a Fed update (r = ${f(lag1.corr, 3)}) mostly disappears without
+    CPI/PCE release days (r = ${f(lag1x.corr, 3)}): both react to the same public data, not to each other. Combined with the head-to-head, Kalshi's edge
+    seems to come from information the model doesn't use, not from front-running it.`);
+  set("t-ll", `<table><thead><tr><th>Variant</th><th>Days</th><th>Fed → Kalshi</th><th>p</th><th>Kalshi → Fed</th><th>p</th><th>Same-day r</th></tr></thead><tbody>
+    ${L.granger.map(g => `<tr><td>${esc(g.variant)}</td><td>${g.n_days}</td><td>${f(g["fed_to_kalshi_coef (dF_l1 in dK eq)"], 3)}</td><td>${f(g.fed_to_kalshi_p, 3)}</td>
+    <td>${f(g["kalshi_to_fed_coef (dK_l1 in dF eq)"], 3)}</td><td>${f(g.kalshi_to_fed_p, 3)}</td><td>${f(g.same_day_corr, 3)}</td></tr>`).join("")}</tbody></table>`);
+
+  // backtest
+  const mid = B.test.find(r => r.cost_model === "mid, no fees"), tr = B.train_at_theta.find(r => r.cost_model === "bid/ask + fees");
+  set("bt-lede", `No. Trading Kalshi CPI strikes whenever the Fed disagrees with the price didn't make money after the bid-ask spread and fees.`);
+  set("bt-body", `Rule: if the Fed's probability exceeds the ask by more than θ, buy YES at the ask; if it's below the bid by more than θ, buy NO.
+    Hold to settlement, pay Kalshi's taker fee. θ was chosen on ${B.split.train} training releases (through Dec 2024) and tested once on ${B.split.test}
+    held-out releases. ${B.train_best_positive ? "" : "No threshold was profitable in training;"} the chosen θ = ${f(B.theta)} made
+    ${sgn(tr.mean_pnl_cents)}¢ per contract in training and ${sgn(testNet.mean_pnl_cents)}¢ in the test period (95% CI ${sgn(testNet.ci_low_cents)}¢ to
+    ${sgn(testNet.ci_high_cents)}¢, t = ${f(testNet.t_stat_release)}), indistinguishable from zero. At midpoint prices with no fees the same signal earned
+    ${sgn(mid.mean_pnl_cents)}¢ in the test period: the spread consumes most of whatever forecasting edge the Fed has. Fills assume the full order trades at
+    the quoted price, which flatters a strategy in thin books.`);
+  set("t-bt", `<table><thead><tr><th>Cost model (test, θ = ${f(B.theta)})</th><th>Trades</th><th>Releases</th><th>¢ / contract</th><th>95% CI</th><th>Hit rate</th><th>Fee ¢</th><th>t</th></tr></thead><tbody>
+    ${B.test.map(r => `<tr><td>${esc(r.cost_model)}</td><td>${r.n_trades}</td><td>${r.n_releases}</td><td>${sgn(r.mean_pnl_cents)}</td>
+    <td>${sgn(r.ci_low_cents)} to ${sgn(r.ci_high_cents)}</td><td>${pct(r.hit_rate)}</td><td>${f(r.mean_fee_cents)}</td><td>${f(r.t_stat_release)}</td></tr>`).join("")}</tbody></table>`);
+
+  set("method-list", [
+    `<b>Truth.</b> The first published one-decimal CPI change. Kalshi contract k pays if it prints <i>above</i> k, i.e. if the unrounded change is ≥ k + 0.05.`,
+    `<b>Fed probabilities.</b> The nowcast is a single number. I turn it into a probability for each strike with a Student-t error distribution, fit only to past
+      months' errors at the same horizon (expanding window, no lookahead). Student-t beat the normal on pre-sample data (before Mar 2022), and a normal-error
+      version gives the same conclusions.`,
+    `<b>Kalshi probabilities.</b> Bid/ask midpoints, repaired to a coherent curve (P(CPI > k) can't rise with k) by isotonic regression.`,
+    `<b>Matched horizons.</b> Both sources use their latest value published at or before the same moment (30, 14, 7, 3, 1 days before release), never after
+      Kalshi's last trade.`,
+    `<b>Statistics.</b> One score per release per source; Diebold–Mariano tests with Newey–West variance and a small-sample correction; encompassing
+      regressions and calibration regressions with SEs clustered by event/release; event-level bootstrap intervals.`,
+  ].map(x => `<li>${x}</li>`).join(""));
+  set("limits-list", [
+    `<b>Small sample.</b> ${n} CPI releases. Differences of the size found here are hard to confirm, and p-values near 0.05 are reported as borderline.
+      Many related tests are shown, so a single significant one shouldn't be over-read.`,
+    `<b>Nowcast archive gap.</b> The Fed's archive skips the last 2–3 business days before each release, so at 1–3 days the comparison uses a nowcast about
+      4 days old (carried forward, with no lookahead). Kalshi's lead also holds at 7–14 days, where the nowcast is fresh.`,
+    `<b>Kalshi liquidity.</b> Some 2023–24 events were thin, and calibration uses midpoints of books with spreads up to 10¢. The backtest assumes full fills at
+      the quoted bid/ask, with no order-book depth data.`,
+    `<b>Settlement matching.</b> Truth is matched to Kalshi's rule (SA CPI-U, first print, one decimal) and cross-checked against Kalshi's own settlement.
+      Oct and Nov 2025 have no official monthly print (federal shutdown) and are excluded. Sep 2025 was released 9 days late, so both sources are cut off
+      at Kalshi's last trade.`,
+    `<b>Fees.</b> Today's fee schedule is applied to all years. Kalshi's historical fee schedules aren't available through its API.`,
+    `<b>Error model.</b> The Fed's probabilities depend on my error model, not just the Fed's point estimate. The model was chosen before looking at the test period.`,
+  ].map(x => `<li>${x}</li>`).join(""));
+  set("built", `Built ${D.meta.built} from the project database by <code>src/viz/build_dashboard.py</code>.`);
+}
+
+// ---------- theme + chart base
+function theme() {
+  const s = getComputedStyle(document.documentElement);
+  const v = k => s.getPropertyValue(k).trim();
+  return { ink: v("--ink"), ink2: v("--ink2"), muted: v("--muted"), grid: v("--grid"), card: v("--card"), border: v("--border"),
+           s1: v("--s1"), s2: v("--s2"), s3: v("--s3"), ref: v("--ref") };
+}
+const CONFIG = { responsive: true, displayModeBar: false };
+function base(T, extra = {}) {
+  const narrow = window.innerWidth < 760;
+  return Object.assign({
+    paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)", autosize: true,
+    font: { family: "system-ui, -apple-system, Segoe UI, Roboto, sans-serif", size: narrow ? 12 : 13, color: T.ink2 },
+    margin: { l: 56, r: 16, t: 40, b: narrow ? 120 : 104 }, hovermode: "closest",
+    hoverlabel: { bgcolor: T.card, bordercolor: T.border, font: { color: T.ink } },
+    // pinned to the bottom of the chart container, so it can never collide with the x-axis title
+    legend: { orientation: "h", yref: "container", y: 0, yanchor: "bottom", x: 0, xanchor: "left", font: { color: T.ink2 } },
+  }, extra);
+}
+const ax = (T, o = {}) => Object.assign({ gridcolor: T.grid, zeroline: false, linecolor: T.border, tickcolor: T.border,
+  title: { font: { color: T.ink2 } } }, o);
+const title = (T, text) => ({ text, x: 0, xanchor: "left", font: { size: 15, color: T.ink } });
+const marker = (c, size = 9) => ({ size, color: c, line: { color: theme().card, width: 2 } });
+
+// ---------- charts
+function chartHorizon(T) {
+  const hs = H.by_horizon.map(r => r.h);
+  const traces = [["kalshi", "Kalshi (crowd)", T.s1], ["fed", "Cleveland Fed nowcast", T.s2], ["combo", "50/50 average", T.s3]].map(([k, name, c]) => ({
+    x: hs, y: H.by_horizon.map(r => r[k].mean), name, type: "scatter", mode: "lines+markers",
+    line: { color: c, width: 2 }, marker: marker(c),
+    error_y: { type: "data", symmetric: false, array: H.by_horizon.map(r => r[k].hi - r[k].mean),
+               arrayminus: H.by_horizon.map(r => r[k].mean - r[k].lo), color: c, thickness: 1.5, width: 0 },
+    customdata: H.by_horizon.map(r => [r[k].lo, r[k].hi, r.n]),
+    hovertemplate: `${name}<br>%{x} days before: Brier %{y:.4f}<br>95% CI %{customdata[0]:.4f}–%{customdata[1]:.4f} · %{customdata[2]} releases<extra></extra>`,
+  }));
+  Plotly.react("c-horizon", traces, base(T, {
+    title: title(T, "Forecast error by days before release"),
+    xaxis: ax(T, { title: { text: "Days before CPI release" }, type: "log", tickvals: [1, 3, 7, 14, 30], ticktext: ["1", "3", "7", "14", "30"], autorange: "reversed" }),
+    yaxis: ax(T, { title: { text: "Mean Brier score per strike" }, rangemode: "tozero" }),
+  }), CONFIG);
+}
+
+let state = { rel: R.length - 1, h: "7" };
+function chartPath(T) {
+  const r = R[state.rel], d = r.daily, x = d.days_before.map(v => -v);
+  const traces = [
+    { x, y: d.kalshi, name: "Kalshi implied (median)", mode: "lines+markers", line: { color: T.s1, width: 2 }, marker: marker(T.s1, 6), connectgaps: false,
+      customdata: d.date, hovertemplate: "%{customdata}: Kalshi %{y:.3f}%<extra></extra>" },
+    { x, y: d.fed, name: "Fed nowcast", mode: "lines", line: { color: T.s2, width: 2, shape: "hv" },
+      customdata: d.date, hovertemplate: "%{customdata}: Fed %{y:.3f}%<extra></extra>" },
+    { x: [Math.min(...x), 0], y: [r.unrounded, r.unrounded], name: `Actual (printed ${r.printed.toFixed(1)}%)`, mode: "lines",
+      line: { color: T.ref, width: 2, dash: "dash" }, hovertemplate: `Actual, unrounded ${r.unrounded.toFixed(3)}% (printed ${r.printed.toFixed(1)}%)<extra></extra>` },
+  ];
+  Plotly.react("c-path", traces, base(T, {
+    title: title(T, `${r.label} CPI: path to release`),
+    xaxis: ax(T, { title: { text: "Days before release (0 = release)" } }),
+    yaxis: ax(T, { title: { text: "Month-over-month CPI, %" }, ticksuffix: "%" }),
+  }), CONFIG);
+}
+function chartCurve(T) {
+  const r = R[state.rel], c = r.curves[state.h];
+  if (!c) { Plotly.purge("c-curve"); return; }
+  const out = c.strike.map(k => (r.printed > k + 1e-9 ? 1 : 0));
+  const traces = [
+    { x: c.strike, y: c.kalshi, name: "Kalshi", mode: "lines+markers", line: { color: T.s1, width: 2 }, marker: marker(T.s1),
+      hovertemplate: "Above %{x:.1f}%: Kalshi %{y:.0%}<extra></extra>" },
+    { x: c.strike, y: c.fed, name: "Fed (model)", mode: "lines+markers", line: { color: T.s2, width: 2 }, marker: marker(T.s2),
+      hovertemplate: "Above %{x:.1f}%: Fed %{y:.0%}<extra></extra>" },
+    { x: c.strike, y: out, name: "What happened", mode: "markers", marker: { size: 10, color: T.ref, symbol: "x-thin", line: { width: 2, color: T.ref } },
+      hovertemplate: "Above %{x:.1f}%: %{y:Yes;;No}<extra></extra>".replace("%{y:Yes;;No}", "%{text}"), text: out.map(o => o ? "yes" : "no") },
+  ];
+  Plotly.react("c-curve", traces, base(T, {
+    title: title(T, `P(CPI prints above strike), ${state.h} day${state.h === "1" ? "" : "s"} before`),
+    xaxis: ax(T, { title: { text: "Strike (printed MoM %)" }, dtick: window.innerWidth < 760 ? 0.4 : 0.2, tickformat: ".1f", ticksuffix: "%", tickangle: 0 }),
+    yaxis: ax(T, { title: { text: "Probability" }, range: [-0.05, 1.05], tickformat: ".0%" }),
+  }), CONFIG);
+  const b = r.brier[state.h];
+  set("explorer-note", `Printed ${r.printed.toFixed(1)}% on ${r.release}. Brier score at ${state.h} day${state.h === "1" ? "" : "s"}: Kalshi ${f(b.kalshi, 3)},
+    Fed ${f(b.fed, 3)} (lower is better). Kalshi's line is the median of its implied distribution; days where 50% fell outside the listed strikes are blank.`);
+}
+function chartReliability(T) {
+  const r = C.reliability;
+  Plotly.react("c-reliability", [
+    { x: [0, 1], y: [0, 1], name: "Perfect calibration", mode: "lines", line: { color: T.ref, dash: "dash", width: 2 }, hoverinfo: "skip" },
+    { x: r.map(d => d.mean_price), y: r.map(d => d.observed_freq), name: "Kalshi (pooled)", mode: "lines+markers", line: { color: T.s1, width: 2 },
+      marker: marker(T.s1), error_y: { type: "data", symmetric: false, array: r.map(d => d.ci_high - d.observed_freq),
+      arrayminus: r.map(d => d.observed_freq - d.ci_low), color: T.s1, thickness: 1.5, width: 0 },
+      customdata: r.map(d => [d.ci_low, d.ci_high, d.n, d.n_events]),
+      hovertemplate: "Priced %{x:.2f} → happened %{y:.1%}<br>95% CI %{customdata[0]:.1%}–%{customdata[1]:.1%}<br>%{customdata[2]} prices, %{customdata[3]} events<extra></extra>" },
+  ], base(T, { title: title(T, "Price vs. how often it happened"),
+    xaxis: ax(T, { title: { text: "Market price" }, range: [0, 1] }), yaxis: ax(T, { title: { text: "Observed frequency" }, range: [0, 1] }) }), CONFIG);
+}
+const tkw = (p, g) => Math.pow(p, g) / Math.pow(Math.pow(p, g) + Math.pow(1 - p, g), 1 / g);
+function chartWeighting(T) {
+  const p = Array.from({ length: 199 }, (_, i) => (i + 1) / 200), r = C.reliability;
+  Plotly.react("c-weighting", [
+    { x: [0, 1], y: [0, 1], name: "No distortion", mode: "lines", line: { color: T.ref, dash: "dash", width: 2 }, hoverinfo: "skip" },
+    { x: p, y: p.map(v => tkw(v, 0.61)), name: "Lab estimate (TK 1992, γ = 0.61)", mode: "lines", line: { color: T.s2, width: 2, dash: "dot" },
+      hovertemplate: "True %{x:.2f} → %{y:.3f}<extra>TK 1992</extra>" },
+    { x: p, y: p.map(v => tkw(v, C.tk.estimate)), name: `Kalshi fit, γ = ${f(C.tk.estimate)}`, mode: "lines", line: { color: T.s1, width: 2 },
+      hovertemplate: "True %{x:.2f} → price %{y:.3f}<extra>Kalshi fit</extra>" },
+    { x: r.map(d => d.observed_freq), y: r.map(d => d.mean_price), name: "Kalshi, binned", mode: "markers", marker: marker(T.s1, 8),
+      hovertemplate: "Happened %{x:.1%} · priced %{y:.2f}<extra></extra>" },
+  ], base(T, { title: title(T, "True probability vs. price"),
+    xaxis: ax(T, { title: { text: "True probability (observed)" }, range: [0, 1] }), yaxis: ax(T, { title: { text: "Market price" }, range: [0, 1] }) }), CONFIG);
+}
+function chartGroups(T) {
+  const g = C.groups.slice().sort((a, b) => a.estimate - b.estimate);
+  const lab = g.map(d => d.kind === "liquidity tercile" ? `Liquidity: ${d.level}` : d.level);
+  document.getElementById("c-groups").style.height = `${26 * g.length + 80}px`;   // container grows with the rows
+  Plotly.react("c-groups", [{
+    x: g.map(d => d.estimate), y: lab, type: "scatter", mode: "markers", marker: marker(T.s1, 10), showlegend: false,
+    error_x: { type: "data", symmetric: false, array: g.map(d => d.ci_high - d.estimate), arrayminus: g.map(d => d.estimate - d.ci_low), color: T.s1, thickness: 1.5, width: 0 },
+    customdata: g.map(d => [d.ci_low, d.ci_high, d.n_events]),
+    hovertemplate: "%{y}: γ = %{x:.2f} [%{customdata[0]:.2f}, %{customdata[1]:.2f}] · %{customdata[2]} events<extra></extra>",
+  }], base(T, {
+    margin: { l: 150, r: 12, t: 12, b: 50 },
+    xaxis: ax(T, { title: { text: "Fitted γ (95% CI)" }, range: [0.2, 2.0] }),
+    yaxis: ax(T, { automargin: true, gridcolor: "rgba(0,0,0,0)" }),
+    shapes: [{ type: "line", x0: 1, x1: 1, yref: "paper", y0: 0, y1: 1, line: { color: T.ref, dash: "dash", width: 2 } },
+             { type: "line", x0: 0.61, x1: 0.61, yref: "paper", y0: 0, y1: 1, line: { color: T.s2, dash: "dot", width: 2 } }],
+  }), CONFIG);
+}
+function chartCcf(T) {
+  const c = L.ccf;
+  Plotly.react("c-ccf", [{
+    x: c.map(d => d.lag), y: c.map(d => d.corr), type: "bar", marker: { color: T.s1, cornerradius: 4 }, width: 0.55, showlegend: false,
+    error_y: { type: "data", symmetric: false, array: c.map(d => d.ci_high - d.corr), arrayminus: c.map(d => d.corr - d.ci_low), color: T.ink2, thickness: 1.5, width: 0 },
+    customdata: c.map(d => [d.ci_low, d.ci_high]),
+    hovertemplate: "Kalshi %{x} day(s) vs Fed: r = %{y:.3f}<br>95% CI %{customdata[0]:.3f} to %{customdata[1]:.3f}<extra></extra>",
+  }], base(T, { title: title(T, "Correlation of daily changes by lag"), margin: { l: 56, r: 16, t: 40, b: 60 },
+    xaxis: ax(T, { title: { text: "Kalshi's move relative to the Fed update (days; + = after)" }, dtick: 1 }),
+    yaxis: ax(T, { title: { text: "Correlation (95% CI)" }, zeroline: true, zerolinecolor: T.ref }) }), CONFIG);
+}
+function chartSweep(T) {
+  const tr = [];
+  [["train", "Training period", T.s1], ["test", "Held-out test", T.s2]].forEach(([k, name, c]) => {
+    const s = B.sweep[k];
+    tr.push({ x: s.map(d => d.theta).concat(s.map(d => d.theta).reverse()), y: s.map(d => d.ci_high_cents).concat(s.map(d => d.ci_low_cents).reverse()),
+              fill: "toself", fillcolor: c, opacity: 0.14, line: { width: 0 }, hoverinfo: "skip", showlegend: false, type: "scatter" });
+    tr.push({ x: s.map(d => d.theta), y: s.map(d => d.mean_pnl_cents), name, mode: "lines+markers", line: { color: c, width: 2 }, marker: marker(c, 7),
+              customdata: s.map(d => [d.ci_low_cents, d.ci_high_cents, d.n_trades, d.n_releases]),
+              hovertemplate: `${name}<br>θ = %{x:.2f}: %{y:.1f}¢ per contract<br>95% CI %{customdata[0]:.1f} to %{customdata[1]:.1f}¢<br>%{customdata[2]} trades, %{customdata[3]} releases<extra></extra>` });
+  });
+  Plotly.react("c-sweep", tr, base(T, {
+    title: title(T, "Net profit per contract vs. signal threshold"),
+    xaxis: ax(T, { title: { text: "Threshold θ (Fed probability minus price)" } }),
+    yaxis: ax(T, { title: { text: "¢ per contract, after spread & fees" }, zeroline: true, zerolinecolor: T.ref }),
+    shapes: [{ type: "line", x0: B.theta, x1: B.theta, yref: "paper", y0: 0, y1: 1, line: { color: T.ink2, dash: "dot", width: 1.5 } }],
+    annotations: [{ x: B.theta, yref: "paper", y: 1, text: `chosen on training: θ = ${f(B.theta)}`, showarrow: false, xanchor: "left", xshift: 6,
+                    font: { size: 12, color: T.ink2 } }],
+  }), CONFIG);
+}
+
+// ---------- controls
+function buildControls() {
+  const sel = document.getElementById("rel-select");
+  sel.innerHTML = R.map((r, i) => `<option value="${i}">${esc(r.label)} · printed ${r.printed.toFixed(1)}%</option>`).reverse().join("");
+  sel.value = String(state.rel);
+  sel.addEventListener("change", () => { state.rel = Number(sel.value); const T = theme(); chartPath(T); chartCurve(T); });
+  const hb = document.getElementById("h-buttons");
+  hb.innerHTML = ["30", "14", "7", "3", "1"].map(h => `<button type="button" data-h="${h}" aria-pressed="${h === state.h}">${h}d</button>`).join("");
+  hb.addEventListener("click", e => {
+    const b = e.target.closest("button"); if (!b) return;
+    state.h = b.dataset.h;
+    hb.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", String(x.dataset.h === state.h)));
+    chartCurve(theme());
+  });
+}
+function renderAll() {
+  const T = theme();
+  chartHorizon(T); chartPath(T); chartCurve(T); chartReliability(T); chartWeighting(T); chartGroups(T); chartCcf(T); chartSweep(T);
+}
+const THEMES = ["auto", "light", "dark"];
+function applyTheme(t) {
+  if (t === "auto") document.documentElement.removeAttribute("data-theme"); else document.documentElement.setAttribute("data-theme", t);
+  document.getElementById("theme-btn").textContent = `Theme: ${t}`;
+  try { localStorage.setItem("theme", t); } catch (e) { /* storage unavailable */ }
+  renderAll();
+}
+document.getElementById("theme-btn").addEventListener("click", () => {
+  const cur = document.documentElement.getAttribute("data-theme") || "auto";
+  applyTheme(THEMES[(THEMES.indexOf(cur) + 1) % THEMES.length]);
+});
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", renderAll);
+
+writeText();
+buildControls();
+let saved = "auto";
+try { saved = localStorage.getItem("theme") || "auto"; } catch (e) { /* storage unavailable */ }
+applyTheme(saved);
+</script>
+</body>
+</html>

@@ -1,0 +1,41 @@
+DESCRIPTIVES
+                                           0
+days_with_both_levels              1316.0000
+days_with_both_changes             1252.0000
+share_days_nowcast_unchanged          0.7181
+share_days_kalshi_unchanged           0.0683
+sd_dF                                 0.0356
+sd_dK                                 0.0494
+mean_abs_gap_kalshi_minus_nowcast     0.1001
+
+GRANGER-STYLE PANEL REGRESSIONS (cluster by release)
+                                                                           0                               1                               2                              3
+variant                              primary: 09:30 snapshot, implied median  excluding CPI/PCE release days  16:00 snapshot (after nowcast)  implied mean, same strike set
+n_days                                                                  1136                            1042                            1147                           1129
+n_releases                                                                53                              53                              53                             53
+fed_to_kalshi_coef (dF_l1 in dK eq)                                   0.1043                          0.0702                          0.0002                         0.0779
+fed_to_kalshi_p                                                       0.2385                          0.4014                          0.9972                         0.1422
+fed_to_kalshi_joint_p                                                 0.3936                          0.2783                          0.9997                          0.246
+kalshi_to_fed_coef (dK_l1 in dF eq)                                  -0.0011                         -0.0092                          -0.017                         0.0551
+kalshi_to_fed_p                                                       0.9755                          0.8026                          0.6153                         0.1208
+kalshi_to_fed_joint_p                                                  0.426                          0.2664                          0.7481                         0.2461
+kalshi_own_lag1                                                      -0.2444                         -0.2807                         -0.1292                        -0.1841
+fed_own_lag1                                                         -0.0108                         -0.0149                         -0.0183                        -0.0143
+same_day_corr                                                         0.0208                           0.025                           0.105                         0.0031
+
+CROSS-CORRELATION corr(dF_t, dK_t+L), primary
+ lag   corr  ci_low  ci_high
+  -3  0.111   0.051    0.174
+  -2  0.074  -0.036    0.176
+  -1 -0.021  -0.130    0.090
+   0  0.021  -0.034    0.083
+   1  0.096   0.008    0.201
+   2 -0.017  -0.100    0.060
+   3  0.058  -0.048    0.153
+
+CROSS-CORRELATION, robustness variants (lags -1..1)
+lag                                -1      0      1
+variant                                            
+16:00 snapshot (after nowcast) -0.040  0.105  0.007
+excluding CPI/PCE release days -0.022  0.025  0.034
+implied mean, same strike set   0.045  0.003  0.103

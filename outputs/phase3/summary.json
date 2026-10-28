@@ -1,0 +1,29 @@
+{
+  "sample": {
+    "raw_points": 7597,
+    "primary_points": 5673,
+    "primary_events": 1123,
+    "primary_markets": 3340,
+    "dropped_empty_book": 234,
+    "dropped_wide_spread": 1690
+  },
+  "heterogeneity": {
+    "category": {
+      "wald_chi2": 20.735382225406166,
+      "df": 13,
+      "p_value": 0.07833003542974074,
+      "pooled": 0.8616397581671125
+    },
+    "liquidity tercile": {
+      "wald_chi2": 3.626700312850743,
+      "df": 2,
+      "p_value": 0.16310678721006677,
+      "pooled": 0.8863063481106711
+    },
+    "high_minus_low_liquidity": {
+      "estimate": 0.1603429250320807,
+      "ci_low": -0.0010850381137955424,
+      "ci_high": 0.3374861227422179
+    }
+  }
+}

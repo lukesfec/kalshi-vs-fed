@@ -1,0 +1,6 @@
+source,form,value
+"Tversky & Kahneman (1992), gains",tk,0.61
+"Tversky & Kahneman (1992), losses",tk,0.69
+Camerer & Ho (1994),tk,0.56
+Wu & Gonzalez (1996),tk,0.71
+"Prelec (1998), suggested",prelec,0.65

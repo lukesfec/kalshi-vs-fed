@@ -1,0 +1,123 @@
+SAMPLE {'raw_points': 7597, 'primary_points': 5673, 'primary_events': 1123, 'primary_markets': 3340, 'dropped_empty_book': 234, 'dropped_wide_spread': 1690}
+
+SCORES overall / by horizon
+ horizon_days  n_points  n_events  base_rate  brier  brier_ci_low  brier_ci_high  log_loss  brier_skill_vs_base_rate  reliability  resolution
+          NaN      5673      1123     0.3222 0.0768        0.0672         0.0855    0.2481                    0.6482       0.0002      0.1416
+          1.0      3107      1099     0.3379 0.0751        0.0653         0.0837    0.2428                    0.6642       0.0002      0.1483
+          7.0      1754       414     0.3250 0.0808        0.0673         0.0949    0.2574                    0.6318       0.0016      0.1403
+         30.0       812       224     0.2562 0.0747        0.0591         0.0883    0.2482                    0.6078       0.0023      0.1186
+
+SCORES by category
+          category_grp  n_points  n_events  brier  brier_ci_low  brier_ci_high  brier_skill_vs_base_rate  reliability
+   Climate and Weather       445       216 0.0573        0.0391         0.0769                    0.6973       0.0048
+           Commodities       501        73 0.0456        0.0304         0.0674                    0.8070       0.0035
+                Crypto       239        36 0.1120        0.0546         0.1828                    0.4938       0.0384
+             Economics       333        43 0.0853        0.0318         0.1351                    0.5242       0.0120
+         Entertainment       573        36 0.0514        0.0276         0.0766                    0.6665       0.0063
+            Financials       436        44 0.0540        0.0363         0.0748                    0.7774       0.0042
+                Health       215       104 0.0526        0.0254         0.0822                    0.7751       0.0144
+              Mentions       909        83 0.1570        0.1340         0.1805                    0.3680       0.0046
+                 Other       448        60 0.0524        0.0307         0.0812                    0.6763       0.0042
+              Politics       247        29 0.0335        0.0182         0.0520                    0.8041       0.0076
+Science and Technology       431        47 0.0539        0.0287         0.0903                    0.7647       0.0084
+                Social        83        30 0.0920        0.0465         0.1410                    0.5406       0.0299
+                Sports       670       256 0.0833        0.0609         0.1115                    0.4792       0.0006
+        Transportation       143        66 0.0476        0.0273         0.0689                    0.7942       0.0058
+
+RELIABILITY pooled
+           bin    n  n_events  mean_price  observed_freq  ci_low  ci_high
+(-0.001, 0.05] 2343       545       0.020          0.009   0.003    0.016
+   (0.05, 0.1]  473       270       0.073          0.047   0.027    0.068
+    (0.1, 0.2]  364       222       0.148          0.126   0.085    0.171
+    (0.2, 0.3]  300       193       0.251          0.273   0.211    0.341
+    (0.3, 0.4]  246       159       0.353          0.366   0.280    0.444
+    (0.4, 0.5]  209       140       0.448          0.450   0.374    0.522
+    (0.5, 0.6]  191       119       0.550          0.581   0.491    0.668
+    (0.6, 0.7]  195       129       0.653          0.662   0.579    0.744
+    (0.7, 0.8]  210       112       0.753          0.738   0.659    0.810
+    (0.8, 0.9]  249       142       0.858          0.839   0.783    0.894
+   (0.9, 0.95]  229       146       0.929          0.917   0.872    0.953
+   (0.95, 1.0]  664       229       0.982          0.994   0.988    0.999
+
+CALIBRATION REGRESSION  logit P(yes) = a + b*logit(price)
+                      sample    n  n_events  intercept  intercept_se  slope  slope_se  z_slope_eq_1  joint_p
+  primary (mid, spread<=10c) 5673      1123    -0.0263        0.0958 1.1096    0.0479        2.2893   0.0530
+all quotes (mid, any spread) 7363      1398    -0.0638        0.0879 1.1272    0.0517        2.4621   0.0178
+            last trade price 6405      1095    -0.2345        0.0946 1.0445    0.0447        0.9957   0.0175
+    primary, 1d before close 3107      1099    -0.0745        0.0909 1.0936    0.0519        1.8030   0.1017
+    primary, 7d before close 1754       414     0.1404        0.1581 1.0869    0.0624        1.3916   0.3354
+   primary, 30d before close  812       224    -0.1883        0.1716 1.2340    0.0998        2.3459   0.0055
+
+MISPRICING MODEL (cluster-robust by event)
+                                                                  coef  se_cluster        z       p
+Intercept                                                       0.0157      0.2227   0.0704  0.9439
+C(horizon, Treatment('1'))[T.30]                               -0.2940      0.1886  -1.5585  0.1191
+C(horizon, Treatment('1'))[T.7]                                 0.2052      0.1115   1.8412  0.0656
+C(category_grp, Treatment('Sports'))[T.Climate and Weather]     0.0603      0.3049   0.1979  0.8431
+C(category_grp, Treatment('Sports'))[T.Commodities]            -0.4326      0.3707  -1.1669  0.2432
+C(category_grp, Treatment('Sports'))[T.Crypto]                  1.0649      0.5039   2.1134  0.0346
+C(category_grp, Treatment('Sports'))[T.Economics]              -0.7191      0.9435  -0.7621  0.4460
+C(category_grp, Treatment('Sports'))[T.Entertainment]          -0.5997      0.4429  -1.3539  0.1758
+C(category_grp, Treatment('Sports'))[T.Financials]             -0.2081      0.3778  -0.5509  0.5817
+C(category_grp, Treatment('Sports'))[T.Health]                 -0.7778      0.4983  -1.5610  0.1185
+C(category_grp, Treatment('Sports'))[T.Mentions]               -0.5786      0.2494  -2.3197  0.0204
+C(category_grp, Treatment('Sports'))[T.Other]                  -0.0132      0.3010  -0.0440  0.9649
+C(category_grp, Treatment('Sports'))[T.Politics]                0.2991      0.4396   0.6804  0.4962
+C(category_grp, Treatment('Sports'))[T.Science and Technology]  0.1776      0.4075   0.4359  0.6629
+C(category_grp, Treatment('Sports'))[T.Social]                 -0.3712      0.7126  -0.5209  0.6025
+C(category_grp, Treatment('Sports'))[T.Transportation]          0.3711      0.4063   0.9134  0.3610
+lp                                                              1.2002      0.0566  21.1901  0.0000
+lp:vol_z                                                       -0.1457      0.0554  -2.6298  0.0085
+vol_z                                                           0.0373      0.1200   0.3112  0.7556
+spread_c                                                        0.0421      0.0219   1.9204  0.0548
+
+WEIGHTING pooled
+  form  estimate  ci_low  ci_high  share_boot_below_1     loglik  loglik_no_distortion
+    tk    0.9065  0.8400   0.9717               0.996 -1399.9633            -1407.4145
+prelec    0.9031  0.8324   0.9713               0.996 -1397.7276            -1407.4145
+
+WEIGHTING by horizon (TK)
+ horizon_days  estimate  ci_low  ci_high  n_events
+            1     0.917   0.843    0.997      1099
+            7     0.934   0.827    1.057       414
+           30     0.830   0.728    0.915       224
+
+WEIGHTING by group (TK)
+                           label  estimate  ci_low  ci_high  n_events
+   category: Climate and Weather     0.754   0.595    0.925       216
+           category: Commodities     0.759   0.603    0.920        73
+                category: Crypto     1.397   0.351    2.763        36
+             category: Economics     1.093   0.823    1.684        43
+         category: Entertainment     0.861   0.686    1.030        36
+            category: Financials     0.756   0.541    0.925        44
+                category: Health     0.963   0.659    1.160       104
+              category: Mentions     1.020   0.913    1.129        83
+                 category: Other     0.910   0.608    1.136        60
+              category: Politics     0.692   0.343    0.907        29
+category: Science and Technology     0.627   0.398    0.898        47
+                category: Social     1.050   0.387    1.225        30
+                category: Sports     0.987   0.714    1.346       256
+        category: Transportation     0.676   0.473    0.934        66
+          liquidity tercile: low     0.847   0.743    0.945       478
+          liquidity tercile: mid     0.866   0.774    0.961       539
+         liquidity tercile: high     1.008   0.887    1.170       491
+
+HETEROGENEITY {
+ "category": {
+  "wald_chi2": 20.735382225406166,
+  "df": 13,
+  "p_value": 0.07833003542974074,
+  "pooled": 0.8616397581671125
+ },
+ "liquidity tercile": {
+  "wald_chi2": 3.626700312850743,
+  "df": 2,
+  "p_value": 0.16310678721006677,
+  "pooled": 0.8863063481106711
+ },
+ "high_minus_low_liquidity": {
+  "estimate": 0.1603429250320807,
+  "ci_low": -0.0010850381137955424,
+  "ci_high": 0.3374861227422179
+ }
+}
