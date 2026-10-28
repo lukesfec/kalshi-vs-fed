@@ -88,6 +88,15 @@ def test_dm_zero_mean_difference_is_insignificant():
     assert abs(out["dm_stat"]) < 1e-9 and out["p_value"] == pytest.approx(1.0)
 
 
+@pytest.mark.parametrize("shift", [-0.35, -0.2, -0.12, 0.0, 0.15, 0.3])
+def test_dm_interval_agrees_with_test(shift):
+    rng = np.random.default_rng(5)
+    d = rng.normal(shift, 1, 53)
+    out = diebold_mariano(d)
+    excludes_zero = out["diff_ci_high"] < 0 or out["diff_ci_low"] > 0
+    assert excludes_zero == (out["p_value"] < 0.05)
+
+
 def test_dm_detects_clear_difference_and_sign():
     rng = np.random.default_rng(4)
     out = diebold_mariano(rng.normal(-0.5, 1, 200))

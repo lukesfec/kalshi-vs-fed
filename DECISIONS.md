@@ -1,15 +1,15 @@
 # Decisions Log
 
-One line each: decision and reason. "Proposed" entries await Luke's sign-off.
+One line each: decision and reason. Judgment calls on scope are marked "Decided by Luke".
 
 ## Phase 0
 - **Headline series = `KXCPI` (CPI-U MoM, SA).** It's the Kalshi contract that matches the Cleveland Fed's headline CPI nowcast measure exactly.
 - **Legacy `CPI-*` events are part of series `KXCPI`.** The API files them there, so no separate `CPI` series pull is needed.
 - **Truth = Kalshi `expiration_value`, cross-checked against ALFRED first-release CPI.** The contract settles on the first BLS print, one decimal, and ignores revisions. Final revised FRED values would be the wrong target.
-- **Head-to-head sample starts Mar 2022 (≥5 strikes per event).** Events with 1–4 strikes can't form a meaningful probability distribution. *(Default adopted 2026-10-27; Luke can override.)*
-- **Exclude Oct 2025 (`KXCPI-25OCT`).** BLS never published that month's CPI, so it settled via Kalshi's fallback rule, not a real print. *(Default adopted.)*
-- **Hourly candles for CPI markets.** That's fine enough to align with the ~10:00 ET nowcast update, at 1 request per market. 1-minute needs chunking for little gain. *(Default adopted.)*
-- **1-day and 3-day horizons use the last nowcast published before that day (carry-forward), flagged as such.** The archive has no nowcasts for the final 2–3 business days before a release. Carry-forward uses only information available at the time, so there's no lookahead. *(Default adopted.)*
+- **Head-to-head sample starts Mar 2022 (≥5 strikes per event).** Events with 1–4 strikes can't form a meaningful probability distribution. *(Decided by Luke, 2026-10-28.)*
+- **Exclude Oct 2025 (`KXCPI-25OCT`).** BLS never published that month's CPI, so it settled via Kalshi's fallback rule, not a real print. *(Decided by Luke, 2026-10-28.)*
+- **Hourly candles for CPI markets.** That's fine enough to align with the ~10:00 ET nowcast update, at 1 request per market. 1-minute needs chunking for little gain. *(Decided by Luke, 2026-10-28.)*
+- **1-day and 3-day horizons use the last nowcast published before that day (carry-forward), flagged as such.** The archive has no nowcasts for the final 2–3 business days before a release. Carry-forward uses only information available at the time, so there's no lookahead. Because this makes the Fed's input 2–4 days stale against a live market price, the headline comparison uses 7 days, where the nowcast is fresh; 1 and 3 days are reported with that caveat. *(Decided by Luke, 2026-10-28.)*
 
 ## Phase 1
 - **Ingestion writes raw API responses to `data/raw/` and small tidy CSVs to `data/processed/`. Postgres loading waits for Phase 2.** Keeps "download" separate from "transform", so the database can always be rebuilt from cache.
@@ -24,8 +24,8 @@ One line each: decision and reason. "Proposed" entries await Luke's sign-off.
 - **The Cleveland Fed's vertical-line release markers are kept separately (`nowcast_release_markers.csv`), not as observations.** They're chart annotations, but they give an independent record of release dates.
 - **Truth check passed:** Kalshi `expiration_value` = ALFRED first-release MoM (1dp) in 62/62 comparable events; all 64 events' yes/no results agree with their value. Oct 2025 and Nov 2025 have no official MoM print (shutdown) but Kalshi settled both at 0.2.
 - **Release dates are triangulated from ALFRED and the Cleveland Fed's markers, which agree on every month.** Kalshi's `close_time` isn't always the release date. In 2021 contracts closed the evening before release, and Sep 2025 closed on its originally scheduled date (Oct 15) while BLS released on Oct 24.
-- **Oct 2025 and Nov 2025 are excluded from the head-to-head (kept in the database, footnoted).** BLS printed no MoM change for either month, so there's no real CPI value to score against; Kalshi's 0.2 came from its fallback rule. *(Proposed 2026-10-27; Luke didn't object.)*
-- **Sep 2025 is kept, with both sources cut off at Kalshi's last trade (Oct 15) for horizons that fall after it.** Horizons count from the actual release (Oct 24). The cap stops the nowcast from getting days of information the market never had. *(Proposed; Luke didn't object.)*
+- **Oct 2025 and Nov 2025 are excluded from the head-to-head (kept in the database, footnoted).** BLS printed no MoM change for either month, so there's no real CPI value to score against; Kalshi's 0.2 came from its fallback rule. *(Decided by Luke, 2026-10-28.)*
+- **Sep 2025 is kept, with both sources cut off at Kalshi's last trade (Oct 15) for horizons that fall after it.** Horizons count from the actual release (Oct 24). The cap stops the nowcast from getting days of information the market never had. *(Decided by Luke, 2026-10-28.)*
 
 ## Phase 2
 - **Candle `ts` = end of the candle period.** A candle with `ts <= t` contains only information available at t, which makes "no lookahead" a single `<=` condition everywhere.
@@ -102,3 +102,13 @@ One line each: decision and reason. "Proposed" entries await Luke's sign-off.
 - **Legends are pinned to the bottom of each chart container (`yref: container`).** Paper-relative legends collided with x-axis titles at some widths.
 - **Headline wording follows the statistics: "borderline", not "significantly better".** At 1 day the DM p-value is 0.07 (Brier), and 15 correlated tests are shown.
 - **`src/run_all.py` rebuilds database → analyses → dashboard in one command (about 4 minutes).** It's the reproducibility path. Downloads stay separate because they hit external APIs.
+
+## Review fixes (2026-10-28)
+- **Primary test, fixed: Diebold–Mariano on the mean Brier score per release. RPS and log score are secondary.** Brier is the score readers look at first, and naming one test up front stops the headline from picking whichever of the 15 related tests looks best.
+- **Headline horizon = 7 days, not 1 day.** At 1–3 days the Fed's nowcast is stale (archive gap) while Kalshi is live, so part of Kalshi's short-horizon edge is mechanical. At 7 days both are current. Result: no significant difference (Brier 0.072 vs 0.089, p = 0.18). The 1–3 day gap is described as suggestive. *(Decided by Luke, 2026-10-28.)*
+- **Difference intervals now use the DM test's own variance: mean ± t(T−1) × HAC standard error (Newey–West, lag 3, HLN-corrected).** The old intervals resampled releases one at a time, ignoring the serial correlation the test allows for, so at 1 day the interval excluded zero while p = 0.068. Now an interval excludes zero exactly when p < 0.05. A unit test checks this.
+- **All other bootstrap intervals (per-source error bars, backtest P&L) use a circular block bootstrap with blocks of 3 consecutive releases.** That matches the Newey–West correlation window, instead of treating months as independent.
+- **Backtest wording: no threshold made money in training (0 of 31), so the held-out result is reported as noise, not as a strategy that held up.** Picking the least-bad of all-losing thresholds isn't evidence of anything.
+- **Backtest power is reported as a minimum detectable edge: (1.96 + 0.84) × block-bootstrap SE ≈ 28¢ per contract on 14 traded test releases.** It makes explicit that the test can't distinguish "no edge" from "too little data".
+- **Lead-lag text states that neither source leads (no cross-lag p < 0.12 in any of 4 versions). Section retitled "Does either one move first? No."** The old title invited a winner the data doesn't support.
+- **The 30-day horizon has 52 releases: Dec 2025's first market opened Dec 18, 2025, only ~26 days before its Jan 13 release (after the shutdown delays).** Footnoted on the dashboard. The footnote is generated from the data.

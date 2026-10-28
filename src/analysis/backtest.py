@@ -19,15 +19,17 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 
-from src.analysis.cpi_headtohead import PRIMARY_MODEL, build_forecasts
+from src.analysis.cpi_headtohead import PRIMARY_MODEL, build_forecasts, nw_lag
 from src.analysis.db import OUTPUT_DIR
 from src.analysis.fees import fee
+from src.analysis.scoring import block_bootstrap_indices
 
 OUT = OUTPUT_DIR / "phase6"
 CONTRACTS = 100
 TEST_START = pd.Timestamp("2025-01-01")
 THETAS = np.round(np.arange(0.0, 0.305, 0.01), 2)
 MIN_TRAIN_TRADES = 20
+MDE_Z = 1.96 + 0.84   # 5% two-sided test, 80% power
 BLUE, ORANGE, AQUA, GRAY, INK, INK2 = "#2a78d6", "#eb6834", "#1baf7a", "#9a9993", "#0b0b0b", "#52514e"
 
 COST_MODELS = {
@@ -67,21 +69,21 @@ def summarize(t: pd.DataFrame, n_boot: int, seed: int = 0) -> dict:
     if t.empty:
         return {"n_trades": 0, "n_releases": 0, "total_pnl_per_100": 0.0, "mean_pnl_cents": np.nan,
                 "ci_low_cents": np.nan, "ci_high_cents": np.nan, "hit_rate": np.nan, "mean_price": np.nan,
-                "mean_fee_cents": np.nan, "t_stat_release": np.nan}
-    per_rel = t.groupby("event_ticker").pnl.agg(["sum", "count"])
-    rng = np.random.default_rng(seed)
-    idx = np.arange(len(per_rel))
-    boots = []
-    for _ in range(n_boot):
-        s = per_rel.iloc[rng.choice(idx, len(idx))]
-        boots.append(s["sum"].sum() / s["count"].sum())
-    rel_sums = per_rel["sum"]
-    t_stat = rel_sums.mean() / (rel_sums.std(ddof=1) / np.sqrt(len(rel_sums))) if len(rel_sums) > 1 else np.nan
+                "mean_fee_cents": np.nan, "t_stat_release": np.nan, "min_detectable_edge_cents": np.nan}
+    per_rel = (t.groupby(["reference_month", "event_ticker"]).pnl.agg(["sum", "count"])
+               .sort_index())                      # time order, for the block bootstrap
+    sums, counts = per_rel["sum"].to_numpy(), per_rel["count"].to_numpy()
+    idx = block_bootstrap_indices(len(per_rel), nw_lag(len(per_rel)), n_boot, seed)
+    boots = sums[idx].sum(axis=1) / counts[idx].sum(axis=1)       # P&L per contract in each draw
+    t_stat = sums.mean() / (sums.std(ddof=1) / np.sqrt(len(sums))) if len(sums) > 1 else np.nan
+    se = boots.std(ddof=1)
     return {"n_trades": len(t), "n_releases": len(per_rel), "total_pnl_per_100": t.pnl.sum() * CONTRACTS,
             "mean_pnl_cents": t.pnl.mean() * 100, "ci_low_cents": np.quantile(boots, .025) * 100,
             "ci_high_cents": np.quantile(boots, .975) * 100, "hit_rate": float((t.payoff == 1).mean()),
             "mean_price": t.price.mean(), "mean_fee_cents": t.fee_per_contract.mean() * 100,
-            "t_stat_release": t_stat}
+            "t_stat_release": t_stat,
+            # smallest true edge this sample would detect 80% of the time at 5% two-sided: (1.96 + 0.84) * SE
+            "min_detectable_edge_cents": MDE_Z * se * 100}
 
 
 def sweep(f: pd.DataFrame, n_boot: int) -> pd.DataFrame:
@@ -159,7 +161,7 @@ def main() -> None:
     print(f"SPLIT releases: {split} (train < {TEST_START.date()} <= test)")
     print(f"CHOSEN theta on train: {theta:.2f}   best training net P&L positive? {train_positive}")
     cols = ["theta", "n_trades", "n_releases", "total_pnl_per_100", "mean_pnl_cents", "ci_low_cents",
-            "ci_high_cents", "hit_rate", "mean_price", "mean_fee_cents", "t_stat_release"]
+            "ci_high_cents", "hit_rate", "mean_price", "mean_fee_cents", "t_stat_release", "min_detectable_edge_cents"]
     for period in ("train", "test"):
         print(f"\nSWEEP {period}, net (bid/ask + fees), selected thetas")
         s = sw[(sw.period == period) & (sw.cost_model == "bid/ask + fees") & sw.theta.isin([0, .02, .05, .08, .1, .15, .2, .25, .3])]

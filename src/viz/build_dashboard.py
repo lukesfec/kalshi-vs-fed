@@ -19,7 +19,9 @@ import numpy as np
 import pandas as pd
 import plotly
 
+from src.analysis.cpi_headtohead import nw_lag
 from src.analysis.db import OUTPUT_DIR, query
+from src.analysis.scoring import block_bootstrap_mean_ci
 from src.ingest.http_cache import PROJECT_ROOT
 
 DOCS = PROJECT_ROOT / "docs"
@@ -28,9 +30,8 @@ P3, P4, P5, P6 = (OUTPUT_DIR / f"phase{i}" for i in (3, 4, 5, 6))
 
 
 def boot_mean_ci(v: np.ndarray, n_boot: int = 2000, seed: int = 1) -> tuple[float, float]:
-    rng = np.random.default_rng(seed)
-    b = [rng.choice(v, len(v)).mean() for _ in range(n_boot)]
-    return float(np.quantile(b, .025)), float(np.quantile(b, .975))
+    """Same circular block bootstrap as the head-to-head tests (v must be in time order)."""
+    return block_bootstrap_mean_ci(v, block=nw_lag(len(v)), n_boot=n_boot, seed=seed)
 
 
 def month_label(ts) -> str:
@@ -44,8 +45,24 @@ def records(df: pd.DataFrame, cols: list[str], digits: int = 5) -> list[dict]:
     return json.loads(out.to_json(orient="records", date_format="iso"))
 
 
+def missing_at_30_days(scores: pd.DataFrame) -> list[dict]:
+    """Releases with no 30-day score, and how long before release their first market opened."""
+    miss = sorted(set(scores.event_ticker) - set(scores[scores.horizon_days == 30].event_ticker))
+    if not miss:
+        return []
+    ev = query("SELECT event_ticker, reference_month, first_open_ts, release_ts FROM v_cpi_events")
+    ev = ev[ev.event_ticker.isin(miss)]
+    out = []
+    for r in ev.itertuples():
+        opened = pd.Timestamp(r.first_open_ts).tz_convert("America/New_York")
+        out.append({"label": month_label(r.reference_month),
+                    "days_listed": round((r.release_ts - r.first_open_ts).total_seconds() / 86400, 1),
+                    "opened": f"{opened:%b} {opened.day}, {opened.year}"})
+    return out
+
+
 def headline() -> dict:
-    s = pd.read_csv(P4 / "scores_per_release.csv")
+    s = pd.read_csv(P4 / "scores_per_release.csv").sort_values("reference_month")
     rows = []
     for h, g in s.groupby("horizon_days"):
         r = {"h": int(h), "n": len(g)}
@@ -60,7 +77,8 @@ def headline() -> dict:
     sens = pd.read_csv(P4 / "sensitivity_normal_errors.csv")
     return {"by_horizon": rows,
             "dm": records(dm, ["horizon_days", "a", "b", "T", "mean_diff", "diff_ci_low", "diff_ci_high", "dm_stat",
-                               "p_value", "share_first_better"]),
+                               "p_value", "share_first_better", "nw_lag"]),
+            "missing_30d": missing_at_30_days(s),
             "dm_log": records(pd.read_csv(P4 / "diebold_mariano.csv").query("metric == 'log' and a == 'kalshi'"),
                               ["horizon_days", "p_value"]),
             "dm_rps": records(pd.read_csv(P4 / "diebold_mariano.csv").query("metric == 'rps' and a == 'kalshi'"),
@@ -142,10 +160,13 @@ def backtest() -> dict:
                                                          "n_trades", "n_releases"]) for p in ("train", "test")},
             "theta": theta,
             "test": records(res, ["cost_model", "n_trades", "n_releases", "mean_pnl_cents", "ci_low_cents",
-                                  "ci_high_cents", "hit_rate", "mean_fee_cents", "t_stat_release"]),
+                                  "ci_high_cents", "hit_rate", "mean_fee_cents", "t_stat_release",
+                                  "min_detectable_edge_cents"]),
             "train_at_theta": records(train_at, ["cost_model", "n_trades", "n_releases", "mean_pnl_cents",
                                                  "ci_low_cents", "ci_high_cents", "t_stat_release"]),
             "train_best_positive": bool(net[net.period == "train"].query("n_trades >= 20").total_pnl_per_100.max() > 0),
+            "train_profitable": int((net[net.period == "train"].total_pnl_per_100 > 0).sum()),
+            "n_thresholds": int(net[net.period == "train"].theta.nunique()),
             "split": {p: int(sw[(sw.period == p) & (sw.theta == 0) & (sw.cost_model == "mid, no fees")].n_releases.iloc[0])
                       for p in ("train", "test")}}
 

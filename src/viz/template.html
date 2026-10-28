@@ -106,7 +106,7 @@ code { font-size: 13px; background: var(--page); border: 1px solid var(--border)
   <div class="tiles" id="tiles"></div>
   <nav class="toc" aria-label="Sections">
     <a href="#headline">Head-to-head</a><a href="#explorer">Pick a release</a><a href="#calibration">Calibration</a>
-    <a href="#leadlag">Who moves first</a><a href="#backtest">Backtest</a><a href="#method">Method &amp; limitations</a>
+    <a href="#leadlag">Lead-lag</a><a href="#backtest">Backtest</a><a href="#method">Method &amp; limitations</a>
   </nav>
 
   <section id="headline">
@@ -114,7 +114,7 @@ code { font-size: 13px; background: var(--page); border: 1px solid var(--border)
     <p class="lede" id="headline-lede"></p>
     <p id="headline-body"></p>
     <div id="c-horizon" class="chart" role="img" aria-label="Mean Brier score by days before release for Kalshi, the Cleveland Fed nowcast, and their average"></div>
-    <p class="note">Lower is better. Error bars: 95% bootstrap intervals for each source's mean. The tests compare the two sources release-by-release, which is more precise than comparing these overlapping bars.</p>
+    <p class="note" id="horizon-note"></p>
     <details><summary>Table: accuracy and tests by horizon</summary><div class="tablewrap" id="t-dm"></div></details>
   </section>
 
@@ -150,7 +150,7 @@ code { font-size: 13px; background: var(--page); border: 1px solid var(--border)
   </section>
 
   <section id="leadlag">
-    <h2>Who moves first?</h2>
+    <h2>Does either one move first? No.</h2>
     <p class="lede" id="ll-lede"></p>
     <p id="ll-body"></p>
     <div id="c-ccf" class="chart short" role="img" aria-label="Cross-correlation of daily changes at lags from minus 3 to plus 3 days"></div>
@@ -215,46 +215,56 @@ const set = (id, html) => { document.getElementById(id).innerHTML = html; };
 
 // ---------- narrative (all numbers from the payload)
 function writeText() {
-  const n = D.meta.n_releases, h1 = byH(1), h30 = byH(30);
-  const gain1 = (h1.fed.mean - h1.kalshi.mean) / h1.fed.mean;
-  const dm1 = dmRow(1, "kalshi", "fed"), dm3 = dmRow(3, "kalshi", "fed"), dm30 = dmRow(30, "kalshi", "fed");
+  const n = D.meta.n_releases, h1 = byH(1), h7 = byH(7), h30 = byH(30);
+  const dm1 = dmRow(1, "kalshi", "fed"), dm3 = dmRow(3, "kalshi", "fed"), dm7 = dmRow(7, "kalshi", "fed"), dm30 = dmRow(30, "kalshi", "fed");
   const pLog1 = H.dm_log.find(r => r.horizon_days === 1).p_value, pRps1 = H.dm_rps.find(r => r.horizon_days === 1).p_value;
-  const e1 = encRow(1), e30 = encRow(30);
+  const e1 = encRow(1), e7 = encRow(7), e30 = encRow(30);
   const c30 = dmRow(30, "combo", "kalshi");
   const tk = C.tk, testNet = B.test.find(r => r.cost_model === "bid/ask + fees");
+  const miss = H.missing_30d.map(m => `${m.label} (its first Kalshi market opened ${m.opened}, only ${Math.floor(m.days_listed)} days before release)`).join("; ");
 
   set("dek", `Kalshi lets anyone bet on next month's inflation print. The Cleveland Fed publishes a daily model-based nowcast of the same number.
     Across <b>${n} monthly CPI releases</b> (${D.meta.first} – ${D.meta.last}) I compare them like-for-like: same strikes, same moment, no hindsight.`);
 
   set("tiles", [
-    { v: pct(gain1), l: "lower forecast error for Kalshi than the Fed nowcast, 1 day before release",
-      s: `Brier ${f(h1.kalshi.mean, 3)} vs ${f(h1.fed.mean, 3)} · borderline (${pfmt(dm1.p_value)}) · ${n} releases` },
-    { v: pfmt(e1.logit_fed_p).replace("p = ", ""), l: "p-value for the Fed adding information Kalshi lacks, 1 day out",
-      s: `Nothing extra near release. At 30 days it does (${pfmt(e30.logit_fed_p)}).` },
+    { v: "No clear winner", l: "Kalshi vs. the Fed nowcast 7 days before release, when both forecasts are current",
+      s: `Brier ${f(h7.kalshi.mean, 3)} vs ${f(h7.fed.mean, 3)} · not significant (${pfmt(dm7.p_value)}, primary test) · ${n} releases` },
+    { v: pfmt(e30.logit_fed_p), l: "the Fed adds information Kalshi lacks a month before release",
+      s: `But not at 7 days (${pfmt(e7.logit_fed_p)}) or 1 day (${pfmt(e1.logit_fed_p)}).` },
     { v: `γ = ${f(tk.estimate)}`, l: "probability distortion in Kalshi prices (1 = none)",
       s: `95% CI ${f(tk.ci_low)}–${f(tk.ci_high)} · lab experiments: 0.61` },
-    { v: `${sgn(testNet.mean_pnl_cents)}¢`, l: "held-out backtest profit per contract after spread and fees",
-      s: `95% CI ${sgn(testNet.ci_low_cents)}¢ to ${sgn(testNet.ci_high_cents)}¢ · not distinguishable from zero` },
+    { v: `${B.train_profitable} of ${B.n_thresholds}`, l: "trading thresholds that made money in training, after spread and fees",
+      s: `So there was no strategy to test. The held-out ${sgn(testNet.mean_pnl_cents)}¢/contract is noise.` },
   ].map(t => `<div class="tile"><div class="v">${t.v}</div><div class="l">${t.l}</div><div class="s">${t.s}</div></div>`).join(""));
 
-  set("headline-lede", `In the final two weeks before a CPI release, Kalshi's prices were about ${pct(gain1)} more accurate than the
-    Fed nowcast. But with ${n} releases the evidence is borderline, not conclusive. A month out, the Fed is slightly ahead and averaging the two is best.`);
-  set("headline-body", `Each source gets one score per release (the mean Brier score over that release's strikes), so the 5–15 strikes of one
-    release are never counted as independent evidence. At 1 day, Kalshi wins ${pct(dm1.share_first_better)} of releases. The Diebold–Mariano test gives
-    ${pfmt(dm1.p_value)} for the Brier score (${pfmt(pRps1)} for RPS, ${pfmt(pLog1)} for log score), and ${pfmt(dm3.p_value)} at 3 days.
-    At 30 days the Fed is ahead (Brier ${f(h30.fed.mean, 3)} vs ${f(h30.kalshi.mean, 3)}; ${pfmt(dm30.p_value)}), and the 50/50 average beats Kalshi
-    (${pfmt(c30.p_value)}). An <b>encompassing regression</b> asks whether each source carries information the other lacks. Near release the Fed adds
-    nothing beyond Kalshi's price (${pfmt(e1.logit_fed_p)}). At 30 days both carry independent information (Fed ${pfmt(e30.logit_fed_p)}), which is why
-    the average wins there.`);
+  set("headline-lede", `When both forecasts are current, Kalshi and the Fed nowcast are statistically indistinguishable. Seven days before
+    release Kalshi's error is lower (Brier ${f(h7.kalshi.mean, 3)} vs ${f(h7.fed.mean, 3)}), but not significantly (${pfmt(dm7.p_value)}).
+    A month out, the Fed carries information the market lacks, and averaging the two is best.`);
+  set("headline-body", `<b>Primary test, fixed in advance:</b> the Diebold–Mariano test on the mean Brier score per release. RPS and log score are
+    secondary. Each source gets one score per release, so the 5–15 strikes of one release are never counted as independent evidence. The
+    intervals in the table use the same variance estimate as the test (Newey–West), so an interval excludes zero exactly when p < 0.05.
+    <br><br><b>Closer to release, Kalshi looks better, but treat it as suggestive.</b> At 1 day its Brier score is ${f(h1.kalshi.mean, 3)} vs
+    ${f(h1.fed.mean, 3)} (${pfmt(dm1.p_value)}; ${pfmt(dm3.p_value)} at 3 days). That's not significant on the primary test. The secondary scores clear
+    5% only barely (${pfmt(pRps1)} RPS, ${pfmt(pLog1)} log), out of 15 related tests. Part of that gap is also mechanical: the Fed's archive skips the
+    last 2–3 business days before each release, so at 1–3 days the comparison uses a nowcast about 4 days old against a live market price. That's why
+    the headline uses 7 days, where the nowcast is fresh.
+    <br><br><b>A month out, the Fed holds its own.</b> At 30 days its Brier score is ${f(h30.fed.mean, 3)} vs Kalshi's ${f(h30.kalshi.mean, 3)}
+    (${pfmt(dm30.p_value)}), and the 50/50 average beats Kalshi (${pfmt(c30.p_value)}). An <b>encompassing regression</b> asks whether each source
+    carries information the other lacks. At 30 days both do (Fed ${pfmt(e30.logit_fed_p)}), which is why the average wins there. At 7 days
+    (${pfmt(e7.logit_fed_p)}) and 1 day (${pfmt(e1.logit_fed_p)}), the Fed adds nothing beyond Kalshi's price.`);
 
   const rows = [1, 3, 7, 14, 30].map(h => {
     const b = byH(h), d = dmRow(h, "kalshi", "fed"), e = encRow(h), s = H.sensitivity.find(r => r.horizon_days === h);
-    return `<tr><td>${h} day${h > 1 ? "s" : ""}</td><td>${b.n}</td><td>${f(b.kalshi.mean, 4)}</td><td>${f(b.fed.mean, 4)}</td><td>${f(b.combo.mean, 4)}</td>
-      <td>${f(d.mean_diff, 4)}</td><td>${f(d.dm_stat)}</td><td>${f(d.p_value, 3)}</td><td>${pct(d.share_first_better)}</td>
+    return `<tr><td>${h} day${h > 1 ? "s" : ""}${h === 30 && miss ? "*" : ""}</td><td>${b.n}</td><td>${f(b.kalshi.mean, 4)}</td><td>${f(b.fed.mean, 4)}</td><td>${f(b.combo.mean, 4)}</td>
+      <td>${f(d.mean_diff, 4)}</td><td>${f(d.diff_ci_low, 4)} to ${f(d.diff_ci_high, 4)}</td><td>${f(d.dm_stat)}</td><td>${f(d.p_value, 3)}</td><td>${pct(d.share_first_better)}</td>
       <td>${f(e.logit_fed_coef)} (${f(e.logit_fed_p, 3)})</td><td>${f(s.p_value, 3)}</td></tr>`;
   }).join("");
   set("t-dm", `<table><thead><tr><th>Before release</th><th>Releases</th><th>Kalshi</th><th>Fed</th><th>50/50</th><th>Kalshi − Fed</th>
-    <th>DM stat</th><th>DM p</th><th>Kalshi wins</th><th>Fed extra info: coef (p)</th><th>p, normal-error Fed</th></tr></thead><tbody>${rows}</tbody></table>`);
+    <th>95% CI (HAC)</th><th>DM stat</th><th>DM p</th><th>Kalshi wins</th><th>Fed extra info: coef (p)</th><th>p, normal-error Fed</th></tr></thead><tbody>${rows}</tbody></table>
+    ${miss ? `<p class="note">* ${n - 1} releases at 30 days: no Kalshi price existed 30 days before ${miss}. That was a knock-on effect of the 2025 shutdown delays.</p>` : ""}`);
+  set("horizon-note", `Lower is better. Error bars: 95% intervals for each source's mean from a block bootstrap (blocks of
+    ${H.dm[0].nw_lag} consecutive releases, matching the test's correlation window). The tests compare the two sources release-by-release,
+    which is more precise than comparing these overlapping bars.${miss ? ` The 30-day point has ${n - 1} releases (see table).` : ""}`);
 
   // calibration
   const sc = C.scores, reg = C.regression.find(r => r.sample.startsWith("primary (")), het = C.heterogeneity;
@@ -279,27 +289,36 @@ function writeText() {
 
   // lead-lag
   const g0 = L.granger[0], lag1 = L.ccf.find(r => r.lag === 1), lag1x = L.ccf_no_release_days.find(r => r.lag === 1);
-  set("ll-lede", `Day to day, neither source reliably moves first. The market and the model mostly move independently.`);
+  const crossP = L.granger.flatMap(g => [g.fed_to_kalshi_p, g.fed_to_kalshi_joint_p, g.kalshi_to_fed_p, g.kalshi_to_fed_joint_p]);
+  set("ll-lede", `Neither source leads the other. No cross-lag effect is significant in any of the ${L.granger.length} versions of the test
+    (smallest p = ${f(Math.min(...crossP), 2)}). Day to day, the market and the model mostly move independently.`);
   set("ll-body", `Kalshi is sampled at 9:30 a.m. ET, before the Fed's ~10:00 a.m. update, so its daily change can only react to <i>yesterday's</i> nowcast.
     Kalshi following the Fed's last change: coefficient ${f(g0["fed_to_kalshi_coef (dF_l1 in dK eq)"])} (${pfmt(g0.fed_to_kalshi_p)}). The Fed following
     Kalshi's earlier move: ${f(g0["kalshi_to_fed_coef (dK_l1 in dF eq)"])} (${pfmt(g0.kalshi_to_fed_p)}). The nowcast is unchanged on
     ${pct(L.desc.share_days_nowcast_unchanged)} of days. The small correlation one day after a Fed update (r = ${f(lag1.corr, 3)}) mostly disappears without
-    CPI/PCE release days (r = ${f(lag1x.corr, 3)}): both react to the same public data, not to each other. Combined with the head-to-head, Kalshi's edge
-    seems to come from information the model doesn't use, not from front-running it.`);
+    CPI/PCE release days (r = ${f(lag1x.corr, 3)}): both react to the same public data, not to each other.
+    ${(() => { const sig = L.ccf.filter(d => d.ci_low > 0 || d.ci_high < 0).map(d => d.lag); const nx = L.ccf_no_release_days.filter(d => d.ci_low > 0 || d.ci_high < 0).length;
+      return sig.length ? `In the chart below, ${sig.length} of ${L.ccf.length} lags (${sig.map(x => (x > 0 ? "+" : "") + x).join(", ")}) have intervals clear of zero. The correlations
+      are small (r ≈ 0.1), several lags are examined at once, and the regressions that control for each series' own past find no lead in either direction,
+      so I don't read them as evidence that one source leads.` : ""; })()}`);
   set("t-ll", `<table><thead><tr><th>Variant</th><th>Days</th><th>Fed → Kalshi</th><th>p</th><th>Kalshi → Fed</th><th>p</th><th>Same-day r</th></tr></thead><tbody>
     ${L.granger.map(g => `<tr><td>${esc(g.variant)}</td><td>${g.n_days}</td><td>${f(g["fed_to_kalshi_coef (dF_l1 in dK eq)"], 3)}</td><td>${f(g.fed_to_kalshi_p, 3)}</td>
     <td>${f(g["kalshi_to_fed_coef (dK_l1 in dF eq)"], 3)}</td><td>${f(g.kalshi_to_fed_p, 3)}</td><td>${f(g.same_day_corr, 3)}</td></tr>`).join("")}</tbody></table>`);
 
   // backtest
   const mid = B.test.find(r => r.cost_model === "mid, no fees"), tr = B.train_at_theta.find(r => r.cost_model === "bid/ask + fees");
-  set("bt-lede", `No. Trading Kalshi CPI strikes whenever the Fed disagrees with the price didn't make money after the bid-ask spread and fees.`);
+  set("bt-lede", `No. After the bid-ask spread and fees, <b>${B.train_profitable} of the ${B.n_thresholds} signal thresholds made money in
+    training</b>, so there was no working strategy to carry forward. The held-out result below is noise, not a strategy that held up.`);
   set("bt-body", `Rule: if the Fed's probability exceeds the ask by more than θ, buy YES at the ask; if it's below the bid by more than θ, buy NO.
-    Hold to settlement, pay Kalshi's taker fee. θ was chosen on ${B.split.train} training releases (through Dec 2024) and tested once on ${B.split.test}
-    held-out releases. ${B.train_best_positive ? "" : "No threshold was profitable in training;"} the chosen θ = ${f(B.theta)} made
-    ${sgn(tr.mean_pnl_cents)}¢ per contract in training and ${sgn(testNet.mean_pnl_cents)}¢ in the test period (95% CI ${sgn(testNet.ci_low_cents)}¢ to
-    ${sgn(testNet.ci_high_cents)}¢, t = ${f(testNet.t_stat_release)}), indistinguishable from zero. At midpoint prices with no fees the same signal earned
-    ${sgn(mid.mean_pnl_cents)}¢ in the test period: the spread consumes most of whatever forecasting edge the Fed has. Fills assume the full order trades at
-    the quoted price, which flatters a strategy in thin books.`);
+    Hold to settlement, pay Kalshi's taker fee. θ was to be chosen on ${B.split.train} training releases (through Dec 2024) and tested once on
+    ${B.split.test} held-out releases. Every threshold lost money in training, so the rule simply picked the one that lost least (θ = ${f(B.theta)},
+    ${sgn(tr.mean_pnl_cents)}¢ per contract). In the test period that θ happened to make ${sgn(testNet.mean_pnl_cents)}¢ per contract, but the 95% interval
+    runs from ${sgn(testNet.ci_low_cents)}¢ to ${sgn(testNet.ci_high_cents)}¢ over only ${testNet.n_releases} traded releases (t = ${f(testNet.t_stat_release)}).
+    <br><br><b>The test is also too small to settle the question.</b> With this many releases, a true edge would need to be about
+    <b>${Math.round(testNet.min_detectable_edge_cents)}¢ per contract</b> to be detected 80% of the time. A real edge of a few cents would be invisible, so this
+    backtest can't tell "no edge" from "too little data". What it does show: at midpoint prices with no fees the signal earned ${sgn(mid.mean_pnl_cents)}¢,
+    so the spread consumes most of whatever forecasting edge the Fed has. Fills assume the full order trades at the quoted price, which flatters a strategy
+    in thin books.`);
   set("t-bt", `<table><thead><tr><th>Cost model (test, θ = ${f(B.theta)})</th><th>Trades</th><th>Releases</th><th>¢ / contract</th><th>95% CI</th><th>Hit rate</th><th>Fee ¢</th><th>t</th></tr></thead><tbody>
     ${B.test.map(r => `<tr><td>${esc(r.cost_model)}</td><td>${r.n_trades}</td><td>${r.n_releases}</td><td>${sgn(r.mean_pnl_cents)}</td>
     <td>${sgn(r.ci_low_cents)} to ${sgn(r.ci_high_cents)}</td><td>${pct(r.hit_rate)}</td><td>${f(r.mean_fee_cents)}</td><td>${f(r.t_stat_release)}</td></tr>`).join("")}</tbody></table>`);
@@ -312,14 +331,18 @@ function writeText() {
     `<b>Kalshi probabilities.</b> Bid/ask midpoints, repaired to a coherent curve (P(CPI > k) can't rise with k) by isotonic regression.`,
     `<b>Matched horizons.</b> Both sources use their latest value published at or before the same moment (30, 14, 7, 3, 1 days before release), never after
       Kalshi's last trade.`,
-    `<b>Statistics.</b> One score per release per source; Diebold–Mariano tests with Newey–West variance and a small-sample correction; encompassing
-      regressions and calibration regressions with SEs clustered by event/release; event-level bootstrap intervals.`,
+    `<b>Statistics.</b> One score per release per source. Primary test, fixed in advance: Diebold–Mariano on the Brier score, with Newey–West variance
+      and a small-sample correction. Difference intervals use that same variance, so intervals and tests agree. Interval bands use a circular block bootstrap
+      (blocks of 3 consecutive releases). Encompassing and calibration regressions use SEs clustered by release/event.`,
   ].map(x => `<li>${x}</li>`).join(""));
   set("limits-list", [
     `<b>Small sample.</b> ${n} CPI releases. Differences of the size found here are hard to confirm, and p-values near 0.05 are reported as borderline.
       Many related tests are shown, so a single significant one shouldn't be over-read.`,
     `<b>Nowcast archive gap.</b> The Fed's archive skips the last 2–3 business days before each release, so at 1–3 days the comparison uses a nowcast about
-      4 days old (carried forward, with no lookahead). Kalshi's lead also holds at 7–14 days, where the nowcast is fresh.`,
+      4 days old (carried forward, with no lookahead) against a live market price. That partly explains Kalshi's short-horizon edge, which is why the headline
+      uses 7 days.`,
+    `<b>Backtest power.</b> ${B.split.test} test releases (${testNet.n_releases} traded) can only detect an edge of about ${Math.round(testNet.min_detectable_edge_cents)}¢ per
+      contract or more.`,
     `<b>Kalshi liquidity.</b> Some 2023–24 events were thin, and calibration uses midpoints of books with spreads up to 10¢. The backtest assumes full fills at
       the quoted bid/ask, with no order-book depth data.`,
     `<b>Settlement matching.</b> Truth is matched to Kalshi's rule (SA CPI-U, first print, one decimal) and cross-checked against Kalshi's own settlement.

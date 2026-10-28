@@ -73,6 +73,28 @@ def cluster_bootstrap(df: pd.DataFrame, cluster: str, stat: Callable[[pd.DataFra
     return np.asarray(out)
 
 
+def block_bootstrap_indices(n: int, block: int, n_boot: int, seed: int = 0) -> np.ndarray:
+    """Circular block bootstrap: each draw strings together blocks of `block` consecutive
+    positions (wrapping around the end) until it has n positions. Shape (n_boot, n).
+
+    Use it on series in TIME ORDER. Resampling observations one at a time assumes they're
+    independent; blocks keep the short-run correlation that a HAC (Newey-West) test allows for,
+    so the interval and the test agree."""
+    rng = np.random.default_rng(seed)
+    n_blocks = int(np.ceil(n / block))
+    starts = rng.integers(0, n, size=(n_boot, n_blocks))
+    idx = (starts[:, :, None] + np.arange(block)[None, None, :]) % n
+    return idx.reshape(n_boot, -1)[:, :n]
+
+
+def block_bootstrap_mean_ci(x, block: int, n_boot: int = 2000, seed: int = 0, level: float = 0.95) -> tuple[float, float]:
+    """Percentile CI for the mean of a time-ordered series, via the circular block bootstrap."""
+    x = np.asarray(x, float)
+    means = x[block_bootstrap_indices(len(x), block, n_boot, seed)].mean(axis=1)
+    a = (1 - level) / 2
+    return float(np.quantile(means, a)), float(np.quantile(means, 1 - a))
+
+
 def reliability_table(df: pd.DataFrame, price: str = "price", outcome: str = "y", cluster: str = "event_ticker",
                       bins=(0, .05, .1, .2, .3, .4, .5, .6, .7, .8, .9, .95, 1.0), n_boot: int = 500,
                       seed: int = 0) -> pd.DataFrame:

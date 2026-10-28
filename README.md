@@ -6,30 +6,28 @@ Kalshi lets anyone trade on next month's CPI print. The Cleveland Fed publishes 
 
 ## Findings
 
-1. **Near release, the crowd is more accurate, but the evidence is borderline.**
-   - One day before release, Kalshi's mean Brier score is **0.068 vs 0.091** for the Fed nowcast, about **25% lower**.
-   - Kalshi wins 58% of releases.
-   - Diebold–Mariano test: **p = 0.07** (Brier), 0.04 (ranked probability score), 0.05 (log score).
-   - The advantage holds at 3, 7 and 14 days but isn't significant there.
-2. **A month out, the Fed holds its own, and the average of the two is best.**
-   - At 30 days the Fed is slightly ahead (0.117 vs 0.131, p = 0.43).
-   - A 50/50 average beats Kalshi alone (p = 0.036).
-3. **The Fed adds information only far from the release.**
-   - In an encompassing regression, the nowcast adds nothing beyond Kalshi's price 1 day out (p = 0.62).
-   - At 30 days it carries independent information (coefficient 0.44, p = 0.006).
-4. **Day to day, neither moves first (null result).**
-   - Kalshi following the Fed's last update: p = 0.24. The Fed following Kalshi: p = 0.98.
-   - The nowcast is unchanged on 72% of days.
-   - The little co-movement there is comes from both reacting to the same CPI/PCE data releases.
+1. **When both forecasts are current, there's no clear winner.**
+   - Primary test, fixed in advance: Diebold–Mariano on the mean Brier score per release.
+   - Seven days before release, where the Fed nowcast is fresh, Kalshi's Brier score is **0.072 vs 0.089**. That's lower, but **not significantly (p = 0.18)**.
+2. **Closer to release Kalshi looks better, but that's suggestive at best.**
+   - At 1 day: 0.068 vs 0.091 (p = 0.07, not significant on the primary test). The secondary scores clear 5% only barely (RPS p = 0.04, log p = 0.05), out of 15 related tests.
+   - Part of the gap is mechanical. The Fed's archive skips the last 2–3 business days before each release, so at 1–3 days a ~4-day-old nowcast is compared with a live market price.
+3. **A month out, the Fed holds its own and adds information the market lacks.**
+   - At 30 days the Fed is slightly ahead (0.117 vs 0.131, p = 0.43), and a 50/50 average beats Kalshi alone (p = 0.036).
+   - Encompassing regression: the nowcast adds information beyond Kalshi's price at 30 days (coefficient 0.44, p = 0.006), but not at 7 days (p = 0.33) or 1 day (p = 0.62).
+4. **Neither source leads the other day to day (null result).**
+   - No cross-lag effect is significant in any of 4 versions of the test (smallest p = 0.12).
+   - The nowcast is unchanged on 72% of days. The little co-movement there is comes from both reacting to the same CPI/PCE data releases.
 5. **Kalshi is well calibrated, with a mild favorite-longshot bias.** This is measured across 5,673 prices from 1,123 events exchange-wide:
    - Contracts priced ≤5¢ averaged 2.0¢ but happened 0.9% of the time.
    - Calibration slope is 1.11 (SE 0.05).
    - The fitted Tversky–Kahneman probability-weighting parameter is **γ = 0.91 [0.84, 0.97]**. That's real distortion, but much milder than the classic laboratory estimate of 0.61.
-6. **The disagreement can't be traded profitably after costs.**
+6. **The disagreement can't be traded profitably after costs, and the test is too small to say more.**
    - Rule: buy when the Fed's probability is more than θ away from Kalshi's bid/ask, hold to settlement, pay Kalshi's taker fee.
-   - No threshold was profitable in training (34 releases).
-   - The chosen θ = 0.15 made **+4.9¢ per contract on 19 held-out releases (95% CI −10.6¢ to +23.1¢)**, which is indistinguishable from zero.
-   - At midpoint prices the same signal earned +8.7¢ in training. The bid-ask spread is what eats it.
+   - **0 of 31 thresholds made money in training** (34 releases). There was no strategy to carry forward; the rule just picked the least-bad threshold (θ = 0.15).
+   - In the held-out period that θ made +4.9¢ per contract over 14 traded releases (95% CI −10.8¢ to +27.0¢). That's noise, not a strategy that held up.
+   - The test can only detect an edge of about **28¢ per contract** (80% power), so it can't tell "no edge" from "too little data".
+   - At midpoint prices with no fees the same signal earned +11.4¢. The bid-ask spread is what eats it.
 
 Every number above is produced by the code in this repo from the project database (`outputs/phase3` … `outputs/phase6`).
 
@@ -54,9 +52,9 @@ Every number above is produced by the code in this repo from the project databas
 - **Matched horizons.** Both sources use their latest value published at or before release − *h* days (*h* = 30, 14, 7, 3, 1), never after Kalshi's last trade.
 - **Statistics.**
   - One score per release per source, so strikes aren't treated as independent.
-  - Diebold–Mariano tests with Newey–West variance and the Harvey–Leybourne–Newbold correction.
+  - Primary test: Diebold–Mariano on the Brier score, with Newey–West variance (lag 3) and the Harvey–Leybourne–Newbold correction. Difference intervals use that same variance, so they agree with the test.
   - Encompassing and calibration regressions with SEs clustered by release/event.
-  - Event-level bootstrap intervals.
+  - Circular block bootstrap (blocks of 3 consecutive releases) for the other intervals.
   - Prospect-theory weighting functions (Tversky–Kahneman 1992; Prelec 1998) fit by maximum likelihood.
 - **No lookahead.** Kalshi candles are timestamped at period end, and a value is used only if published at or before the as-of time. Tests check this explicitly.
 
@@ -64,8 +62,8 @@ Every methodological choice and its reason is in [DECISIONS.md](DECISIONS.md). T
 
 ## Limitations
 
-- **Small sample:** 53 releases. Effects of this size are hard to confirm, so p-values near 0.05 are reported as borderline. Many correlated tests are shown; a single significant one shouldn't be over-read.
-- **Nowcast archive gap:** the Fed archive has no values for the last 2–3 business days before each release, so the 1–3 day comparisons use a nowcast about 4 days old (carried forward). No fallback model was needed or used. Kalshi's lead also appears at 7–14 days, where the nowcast is fresh.
+- **Small sample:** 53 releases (52 at 30 days: the Dec 2025 market opened only ~26 days before its release). Effects of this size are hard to confirm, so p-values near 0.05 are reported as suggestive. Many correlated tests are shown; a single significant one shouldn't be over-read. The backtest's 14 traded test releases can only detect an edge of ~28¢ per contract.
+- **Nowcast archive gap:** the Fed archive has no values for the last 2–3 business days before each release, so the 1–3 day comparisons use a nowcast about 4 days old (carried forward). No fallback model was needed or used. That's why the headline uses 7 days, where the nowcast is fresh and the two sources are statistically tied.
 - **Kalshi liquidity:** some 2023–24 CPI events were thin. Calibration uses midpoints of books with spreads up to 10¢. The backtest assumes full fills at the quoted bid/ask, because there's no order-book depth data.
 - **Settlement-definition matching:** Oct and Nov 2025 have no official monthly print (federal shutdown) and are excluded. Sep 2025 was released 9 days late, so both sources are cut off at Kalshi's last trade.
 - **Fees:** today's published taker fee (0.07 × C × P × (1−P), rounded up) is applied to all years. Historical schedules aren't available via the API.

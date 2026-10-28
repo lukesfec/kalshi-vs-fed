@@ -107,33 +107,41 @@ def per_release_scores(f: pd.DataFrame) -> pd.DataFrame:
     return f.groupby(["event_ticker", "reference_month", "horizon_days"]).apply(agg).reset_index()
 
 
+def nw_lag(T: int) -> int:
+    """Newey-West truncation lag, floor(T^(1/3)) (= 3 for 53 releases). Also the bootstrap block
+    length, so confidence intervals allow for the same serial correlation as the DM test."""
+    return int(np.floor(T ** (1 / 3)))
+
+
 def diebold_mariano(d: np.ndarray) -> dict:
     """DM test on a loss differential d_t (one per release, in time order).
     HAC (Newey-West) variance, Harvey-Leybourne-Newbold small-sample correction, t(T-1) reference.
     d < 0 means the first source has lower loss (is more accurate)."""
     d = np.asarray(d, float)
     T = len(d)
-    lag = int(np.floor(T ** (1 / 3)))
+    lag = nw_lag(T)
     dc = d - d.mean()
     gamma = [np.sum(dc[k:] * dc[:T - k]) / T for k in range(lag + 1)]
     var = gamma[0] + 2 * sum((1 - k / (lag + 1)) * gamma[k] for k in range(1, lag + 1))
-    dm = d.mean() / np.sqrt(var / T)
-    hln = dm * np.sqrt((T - 1) / T)            # one-step (non-overlapping monthly releases)
+    se = np.sqrt(var / T) / np.sqrt((T - 1) / T)   # HLN small-sample correction folded into the SE
+    hln = d.mean() / se                            # one-step (non-overlapping monthly releases)
     p = 2 * stats.t.sf(abs(hln), T - 1)
+    half = stats.t.ppf(0.975, T - 1) * se
+    # The CI uses exactly the test's SE and reference distribution, so it excludes 0 iff p < 0.05.
     return {"T": T, "mean_diff": d.mean(), "dm_stat": hln, "p_value": p, "nw_lag": lag,
+            "diff_ci_low": d.mean() - half, "diff_ci_high": d.mean() + half,
             "share_first_better": float((d < 0).mean())}
 
 
 def compare(scores: pd.DataFrame, metric: str, a: str, b: str, n_boot: int) -> pd.DataFrame:
     rows = []
     for h, g in scores.sort_values("reference_month").groupby("horizon_days"):
-        d = (g[f"{metric}_{a}"] - g[f"{metric}_{b}"]).to_numpy()
-        rng = np.random.default_rng(0)
-        boots = [rng.choice(d, len(d)).mean() for _ in range(n_boot)]
+        d = (g[f"{metric}_{a}"] - g[f"{metric}_{b}"]).to_numpy()   # time order (sorted above)
+        lo, hi = scoring.block_bootstrap_mean_ci(d, block=nw_lag(len(d)), n_boot=n_boot, seed=0)
         rows.append({"horizon_days": h, "metric": metric, "a": a, "b": b,
                      f"mean_{a}": g[f"{metric}_{a}"].mean(), f"mean_{b}": g[f"{metric}_{b}"].mean(),
-                     "diff_ci_low": np.quantile(boots, .025), "diff_ci_high": np.quantile(boots, .975),
-                     **diebold_mariano(d)})
+                     **diebold_mariano(d),          # diff_ci_low/high: HAC interval matching the test
+                     "block_boot_ci_low": lo, "block_boot_ci_high": hi, "boot_block": nw_lag(len(d))})
     return pd.DataFrame(rows)
 
 
@@ -162,11 +170,10 @@ def chart_brier_by_horizon(scores: pd.DataFrame, path, n_boot: int):
     for s, color, label in (("kalshi", BLUE, "Kalshi (crowd)"), ("fed", ORANGE, "Cleveland Fed nowcast"),
                             ("combo", AQUA, "50/50 average")):
         stats_ = []
-        for h, g in scores.groupby("horizon_days"):
+        for h, g in scores.sort_values("reference_month").groupby("horizon_days"):
             v = g[f"brier_{s}"].to_numpy()
-            rng = np.random.default_rng(1)
-            b = [rng.choice(v, len(v)).mean() for _ in range(n_boot)]
-            stats_.append((h, v.mean(), np.quantile(b, .025), np.quantile(b, .975), len(v)))
+            lo, hi = scoring.block_bootstrap_mean_ci(v, block=nw_lag(len(v)), n_boot=n_boot, seed=1)
+            stats_.append((h, v.mean(), lo, hi, len(v)))
         h, m, lo, hi, n = map(np.array, zip(*stats_))
         fig.add_trace(go.Scatter(
             x=h, y=m, mode="lines+markers", name=label, line=dict(color=color, width=2),

@@ -1,0 +1,54 @@
+SPLIT releases: {'train': 34, 'test': 19} (train < 2025-01-01 <= test)
+CHOSEN theta on train: 0.15   best training net P&L positive? False
+
+SWEEP train, net (bid/ask + fees), selected thetas
+ theta  n_trades  n_releases  total_pnl_per_100  mean_pnl_cents  ci_low_cents  ci_high_cents  hit_rate  mean_price  mean_fee_cents  t_stat_release  min_detectable_edge_cents
+  0.00      1026          34           -2011.38          -1.960        -6.176          2.746     0.433       0.445           0.749          -0.733                      6.395
+  0.02       791          34           -1634.75          -2.067        -7.351          3.845     0.436       0.448           0.890          -0.620                      8.083
+  0.05       595          34           -1374.78          -2.311        -9.059          5.825     0.417       0.430           1.023          -0.537                     10.753
+  0.08       485          34            -860.11          -1.773        -9.574          8.118     0.394       0.401           1.093          -0.364                     12.590
+  0.10       416          32            -492.22          -1.183        -9.440          9.491     0.404       0.404           1.159          -0.231                     13.680
+  0.15       289          30            -135.21          -0.468       -11.358         15.682     0.381       0.373           1.226          -0.072                     19.000
+  0.20       234          24            -710.29          -3.035       -15.191         11.672     0.321       0.339           1.228          -0.450                     19.557
+  0.25       187          23            -801.97          -4.289       -17.006         12.486     0.283       0.314           1.214          -0.574                     21.671
+  0.30       150          21            -856.56          -5.710       -19.548         12.392     0.253       0.298           1.224          -0.719                     23.017
+
+SWEEP test, net (bid/ask + fees), selected thetas
+ theta  n_trades  n_releases  total_pnl_per_100  mean_pnl_cents  ci_low_cents  ci_high_cents  hit_rate  mean_price  mean_fee_cents  t_stat_release  min_detectable_edge_cents
+  0.00       512          19            -447.70          -0.874        -6.882          7.288     0.336       0.337           0.740          -0.257                     10.216
+  0.02       338          19              70.93           0.210        -8.473         11.549     0.373       0.361           0.944           0.044                     14.548
+  0.05       251          19             203.36           0.810       -10.021         14.306     0.394       0.376           1.062           0.138                     17.609
+  0.08       196          19             386.81           1.974       -10.564         18.343     0.393       0.362           1.123           0.279                     21.118
+  0.10       174          18             515.82           2.964        -9.967         21.195     0.397       0.355           1.168           0.401                     22.602
+  0.15       109          14             539.18           4.947       -10.825         26.955     0.422       0.359           1.310           0.541                     28.176
+  0.20        86          11             299.09           3.478       -15.313         27.477     0.395       0.347           1.336           0.342                     30.959
+  0.25        67          11            -111.16          -1.659       -21.913         26.215     0.299       0.302           1.316          -0.148                     34.884
+  0.30        46          11            -161.42          -3.509       -22.968         24.457     0.261       0.283           1.292          -0.308                     34.275
+
+COST DECOMPOSITION, train, theta = 0.05 / 0.10
+      cost_model  theta  n_trades  n_releases  total_pnl_per_100  mean_pnl_cents  ci_low_cents  ci_high_cents  hit_rate  mean_price  mean_fee_cents  t_stat_release  min_detectable_edge_cents
+    mid, no fees   0.05       807          34            4712.50           5.840        -1.541         13.463     0.501       0.442           0.000           1.601                     10.700
+    mid, no fees   0.10       576          34            5025.50           8.725        -0.857         19.810     0.488       0.401           0.000           1.859                     14.856
+bid/ask, no fees   0.05       595          34            -766.00          -1.287        -8.070          6.845     0.417       0.430           0.000          -0.301                     10.756
+bid/ask, no fees   0.10       416          32             -10.00          -0.024        -8.284         10.720     0.404       0.404           0.000          -0.005                     13.708
+  bid/ask + fees   0.05       595          34           -1374.78          -2.311        -9.059          5.825     0.417       0.430           1.023          -0.537                     10.753
+  bid/ask + fees   0.10       416          32            -492.22          -1.183        -9.440          9.491     0.404       0.404           1.159          -0.231                     13.680
+
+HELD-OUT TEST RESULT at theta = 0.15
+      cost_model  theta  n_trades  n_releases  total_pnl_per_100  mean_pnl_cents  ci_low_cents  ci_high_cents  hit_rate  mean_price  mean_fee_cents  t_stat_release  min_detectable_edge_cents
+    mid, no fees   0.15       155          17            1759.50          11.352        -5.237         31.136     0.516       0.403            0.00           1.303                     25.901
+bid/ask, no fees   0.15       109          14             682.00           6.257        -9.501         28.301     0.422       0.359            0.00           0.685                     28.149
+  bid/ask + fees   0.15       109          14             539.18           4.947       -10.825         26.955     0.422       0.359            1.31           0.541                     28.176
+
+BY HORIZON at chosen theta (net)
+period  horizon_days  n_trades  n_releases  mean_pnl_cents  ci_low_cents  ci_high_cents  hit_rate
+  test             1        24          13            4.04        -15.84          27.87      0.38
+  test             3        22          12            0.37        -16.17          20.55      0.36
+  test             7        21          11            4.36        -11.39          22.62      0.43
+  test            14        18          10            7.07        -14.27          31.71      0.50
+  test            30        24           8            8.98        -10.86          32.50      0.46
+ train             1        55          22           -6.86        -21.24           9.20      0.29
+ train             3        53          21           -6.79        -20.69           9.01      0.30
+ train             7        59          22            0.84        -14.21          19.05      0.37
+ train            14        64          25            3.83         -9.72          19.06      0.44
+ train            30        58          21            5.30        -10.97          23.20      0.48
